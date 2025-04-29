@@ -15,6 +15,33 @@ export const learningModulesData: LearningModule[] = [
           { type: 'text', content: 'Investing allows your money to grow over time through compounding. This means your returns start earning their own returns. Start early, even with small amounts!' },
           { type: 'text', content: 'Saving money is good, but inflation can erode its value over time. Investing aims to outpace inflation and build real wealth.' },
           { type: 'image', src: '/images/placeholder-compound.png', alt: 'Chart showing compound growth vs simple interest' },
+          {
+            type: 'quiz',
+            questions: [
+              {
+                id: 'q1',
+                questionText: 'What is the main benefit of compounding?',
+                options: [
+                  'Guaranteed high returns',
+                  'Earning returns on your returns',
+                  'Avoiding all investment risk',
+                  'Getting rich quick'
+                ],
+                correctAnswerIndex: 1
+              },
+              {
+                id: 'q2',
+                questionText: 'Why is investing often preferred over just saving money in a bank account?',
+                options: [
+                  'Investing is always safer',
+                  'Banks don\'t offer interest',
+                  'Investing aims to beat inflation',
+                  'Investing requires less money'
+                ],
+                correctAnswerIndex: 2
+              }
+            ]
+          }
         ]
       },
       {

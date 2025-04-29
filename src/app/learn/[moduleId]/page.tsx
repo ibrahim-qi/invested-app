@@ -5,6 +5,7 @@ import Image from 'next/image'; // For handling image blocks
 import Tooltip from '@/components/Tooltip'; // Import Tooltip
 import { glossaryData } from '@/lib/glossaryData'; // Import Glossary Data
 import React from 'react'; // Import React for fragments
+import QuizComponent from '@/components/QuizComponent'; // Import QuizComponent
 
 // Function to generate static paths at build time (optional but good for performance)
 export async function generateStaticParams() {
@@ -72,7 +73,9 @@ const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
           {block.caption && <figcaption className="text-center text-sm text-gray-500 mt-2">{block.caption}</figcaption>}
         </figure>
       );
-    // Add cases for 'diagram' and 'quiz' later
+    case 'quiz':
+      return <QuizComponent questions={block.questions} />;
+    // Add case for 'diagram' later
     default:
       return null;
   }

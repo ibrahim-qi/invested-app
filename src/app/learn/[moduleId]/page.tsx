@@ -2,6 +2,9 @@ import { learningModulesData } from '@/lib/learningModulesData';
 import type { ContentBlock } from '@/types/education.types';
 import { notFound } from 'next/navigation';
 import Image from 'next/image'; // For handling image blocks
+import Tooltip from '@/components/Tooltip'; // Import Tooltip
+import { glossaryData } from '@/lib/glossaryData'; // Import Glossary Data
+import React from 'react'; // Import React for fragments
 
 // Function to generate static paths at build time (optional but good for performance)
 export async function generateStaticParams() {
@@ -9,6 +12,12 @@ export async function generateStaticParams() {
     moduleId: module.id,
   }));
 }
+
+// Generate a regex to find glossary terms (case-insensitive)
+const glossaryTerms = Array.from(glossaryData.keys());
+// Escape regex special characters in terms before joining
+const escapedTerms = glossaryTerms.map(term => term.replace(/[.*+?^${}()|[\\]]/g, '\\$&'));
+const glossaryRegex = new RegExp(`\\b(${escapedTerms.join('|')})\\b`, 'gi');
 
 // Helper component to render individual content blocks
 const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
@@ -22,7 +31,29 @@ const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
       if (block.level === 6) return <h6 className="text-sm font-semibold my-2">{block.content}</h6>;
       return <p className="font-semibold my-2">{block.content}</p>; // Fallback for level 1 or unexpected
     case 'text':
-      return <p className="my-2 text-gray-700 dark:text-gray-300">{block.content}</p>;
+      const parts = block.content.split(glossaryRegex);
+      return (
+        <p className="my-2 text-gray-700 dark:text-gray-300">
+          {parts.map((part, index) => {
+            // Check if the part is a glossary term (case-insensitive)
+            const lowerCasePart = part?.toLowerCase();
+            const isGlossaryTerm = glossaryTerms.some(term => term.toLowerCase() === lowerCasePart);
+
+            if (isGlossaryTerm && glossaryData.has(lowerCasePart)) {
+              return (
+                <Tooltip key={index} text={glossaryData.get(lowerCasePart)!}>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400 cursor-help border-b border-dotted border-blue-600 dark:border-blue-400">
+                    {part} {/* Display original casing */}
+                  </span>
+                </Tooltip>
+              );
+            } else {
+              // Regular text part
+              return <React.Fragment key={index}>{part}</React.Fragment>;
+            }
+          })}
+        </p>
+      );
     case 'image':
       return (
         <figure className="my-4">

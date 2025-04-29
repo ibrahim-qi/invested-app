@@ -6,6 +6,8 @@ import Tooltip from '@/components/Tooltip'; // Import Tooltip
 import { glossaryData } from '@/lib/glossaryData'; // Import Glossary Data
 import React from 'react'; // Import React for fragments
 import QuizComponent from '@/components/QuizComponent'; // Import QuizComponent
+import { createSupabaseServerClient } from '@/lib/supabaseClient'; // Import server client
+import MarkCompleteButton from '@/components/MarkCompleteButton'; // Import the button
 
 // Function to generate static paths at build time (optional but good for performance)
 export async function generateStaticParams() {
@@ -81,29 +83,64 @@ const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
   }
 };
 
-export default function ModulePage({ params }: { params: { moduleId: string } }) {
+export default async function ModulePage({ params }: { params: { moduleId: string } }) {
+  const supabase = createSupabaseServerClient();
   const module = learningModulesData.find(m => m.id === params.moduleId);
 
   if (!module) {
     notFound(); // Show 404 page if module ID is invalid
   }
 
+  // --- Fetch user progress for this module --- 
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  let completedLessonIds = new Set<string>();
+
+  if (userId) {
+    const { data: progressData, error } = await supabase
+      .from('user_lesson_progress')
+      .select('lesson_id')
+      .eq('user_id', userId)
+      .eq('module_id', params.moduleId); // Filter by current module
+
+    if (error) {
+      console.error('Error fetching lesson progress for module:', error.message);
+    } else if (progressData) {
+      completedLessonIds = new Set(progressData.map(p => p.lesson_id));
+    }
+  }
+  // -------------------------------------------
+
   return (
     <article className="prose dark:prose-invert max-w-none">
       <h1 className="text-3xl font-bold mb-4 border-b pb-2">{module.title}</h1>
       <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">{module.description}</p>
 
-      {module.lessons.map((lesson, lessonIndex) => (
-        <section key={lesson.id} className="mb-8 p-4 border rounded shadow-sm">
-          <h2 className="text-2xl font-bold mb-4">Lesson {lessonIndex + 1}: {lesson.title}</h2>
-          <p className="text-sm text-gray-500 mb-4">Estimated time: {lesson.estimatedTimeMinutes} minutes</p>
-          <div>
-            {lesson.contentBlocks.map((block, blockIndex) => (
-              <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {module.lessons.map((lesson, lessonIndex) => {
+        const isLessonComplete = completedLessonIds.has(lesson.id);
+        return (
+          <section key={lesson.id} className="mb-8 p-4 border rounded shadow-sm relative">
+            {isLessonComplete && (
+               <span className="absolute top-2 right-2 text-xs text-green-600 font-semibold">Completed</span>
+            )}
+            <h2 className="text-2xl font-bold mb-4">Lesson {lessonIndex + 1}: {lesson.title}</h2>
+            <p className="text-sm text-gray-500 mb-4">Estimated time: {lesson.estimatedTimeMinutes} minutes</p>
+            <div>
+              {lesson.contentBlocks.map((block, blockIndex) => (
+                <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} />
+              ))}
+            </div>
+            {userId && (
+              <MarkCompleteButton 
+                userId={userId} 
+                moduleId={module.id} 
+                lessonId={lesson.id} 
+                isInitiallyComplete={isLessonComplete} 
+              />
+            )}
+          </section>
+        )
+      })}
 
       {/* Add navigation (Next/Prev Lesson) later */}
     </article>

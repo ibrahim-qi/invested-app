@@ -40,10 +40,14 @@ const Header = () => {
         <Link href="/" className="text-xl font-bold">
           InvestEd
         </Link>
-        <nav>
+        <nav className="flex items-center space-x-6">
+          <Link href="/learn" className="hover:text-gray-300 text-sm">Learn</Link>
+          <Link href="/simulation" className="hover:text-gray-300 text-sm">Simulate</Link>
+
           {user ? (
             <div className="flex items-center space-x-4">
-              <span>{user.email}</span>
+              <Link href="/dashboard" className="hover:text-gray-300 text-sm">Dashboard</Link>
+              <span className="text-sm">{user.email}</span>
               <button
                 onClick={handleLogout}
                 className="bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm"
@@ -52,9 +56,7 @@ const Header = () => {
               </button>
             </div>
           ) : (
-            <Link href="/login" className="hover:text-gray-300">
-              Login
-            </Link>
+            <Link href="/login" className="hover:text-gray-300 text-sm">Login</Link>
           )}
         </nav>
       </div>

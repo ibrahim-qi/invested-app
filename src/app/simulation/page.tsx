@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { calculatePortfolioGrowth } from '@/lib/simulationUtils'; // Import the new calculation function
 // Import Recharts components
 import {
@@ -15,6 +15,8 @@ import {
 } from 'recharts';
 import { scenarioData } from '@/lib/scenarioData'; // Import scenario data
 import type { Scenario, ScenarioChoice } from '@/types/simulation.types'; // Import scenario types
+import { createClient } from '@/lib/supabaseClient'; // Import client-side client
+import type { User } from '@supabase/supabase-js'; // Import User type
 
 // Placeholder types for simulation - we'll refine these
 type SimulationParams = {
@@ -38,6 +40,7 @@ const formatCurrency = (value: number) => `£${value.toLocaleString()}`;
 const formatYear = (month: number) => `Year ${Math.floor(month / 12)}`;
 
 export default function SimulationPage() {
+  const supabase = createClient(); // Use client-side client
   const [params, setParams] = useState<SimulationParams>({
     initialInvestment: 1000,
     monthlyContribution: 100,
@@ -51,6 +54,35 @@ export default function SimulationPage() {
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
   const [selectedChoice, setSelectedChoice] = useState<ScenarioChoice | null>(null);
   // ---------------------
+
+  // --- State for Save Functionality ---
+  const [user, setUser] = useState<User | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  // ----------------------------------
+
+  // --- Fetch user session on mount --- 
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!error) {
+        setUser(data.user);
+      }
+    };
+    fetchUser();
+
+    // Optional: Listen for auth changes if needed
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+        setUser(session?.user ?? null);
+    });
+
+    return () => {
+        authListener?.subscription.unsubscribe();
+    };
+
+  }, [supabase]);
+  // -------------------------------------
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -103,6 +135,54 @@ export default function SimulationPage() {
     setResult(simulationOutput);
     setIsLoading(false);
   };
+
+  // --- Handle Save Simulation ---
+  const handleSaveSimulation = async () => {
+    if (!user || !result || isSaving) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    // Apply scenario impact again to get the adjusted params used for the result
+    let adjustedParams = { ...params }; 
+    if (selectedScenario && selectedChoice) {
+        const impact = selectedChoice.impact;
+        adjustedParams.initialInvestment += (impact.initialInvestmentChange ?? 0);
+        adjustedParams.initialInvestment -= (impact.oneOffCost ?? 0);
+        adjustedParams.initialInvestment += (impact.oneOffIncome ?? 0);
+        adjustedParams.monthlyContribution += (impact.monthlyContributionChange ?? 0);
+        adjustedParams.initialInvestment = Math.max(0, adjustedParams.initialInvestment);
+        adjustedParams.monthlyContribution = Math.max(0, adjustedParams.monthlyContribution);
+    }
+
+    const { error } = await supabase
+      .from('saved_simulations')
+      .insert({
+        user_id: user.id,
+        // simulation_name: prompt("Enter a name for this simulation (optional):"), // Optional: Get name
+        initial_investment: adjustedParams.initialInvestment,
+        monthly_contribution: adjustedParams.monthlyContribution,
+        time_horizon_years: adjustedParams.timeHorizonYears,
+        risk_level: adjustedParams.riskLevel,
+        scenario_id: selectedScenario?.id || null,
+        scenario_choice_id: selectedChoice?.id || null,
+        final_balance: result.finalBalance,
+        total_contributions: result.totalContributions,
+        total_growth: result.totalGrowth,
+      });
+
+    if (error) {
+      console.error("Error saving simulation:", error.message);
+      setSaveError("Failed to save simulation. Please try again.");
+    } else {
+      setSaveSuccess(true);
+      // Hide success message after a few seconds
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }
+    setIsSaving(false);
+  };
+  // -----------------------------
 
   return (
     <div>
@@ -217,7 +297,22 @@ export default function SimulationPage() {
 
         {/* Results Display Section */}
         <div className="md:col-span-2 bg-white dark:bg-gray-900 p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Results</h2>
+          <div className="flex justify-between items-start mb-4">
+             <h2 className="text-xl font-semibold">Results</h2>
+             {/* --- Save Button --- */} 
+             {user && result && !isLoading && (
+                <button 
+                    onClick={handleSaveSimulation}
+                    disabled={isSaving || saveSuccess}
+                    className="bg-purple-600 hover:bg-purple-700 text-white text-sm py-1 px-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isSaving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Simulation'}
+                </button>
+             )}
+             {/* ------------------- */} 
+          </div>
+          {saveError && <p className="text-red-500 text-sm mb-2">{saveError}</p>}
+          
           {isLoading && <p>Calculating results...</p>}
           {result && !isLoading && (
             <div className="space-y-3">

@@ -206,7 +206,7 @@ export default function SimulationPage() {
 
             <button
                 onClick={runSimulation}
-                disabled={isLoading || (selectedScenario && !selectedChoice)}
+                disabled={Boolean(isLoading || (selectedScenario && !selectedChoice))}
                 className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 title={selectedScenario && !selectedChoice ? 'Please select a choice for the scenario' : ''}
               >

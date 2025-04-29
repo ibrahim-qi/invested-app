@@ -13,6 +13,8 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import { scenarioData } from '@/lib/scenarioData'; // Import scenario data
+import type { Scenario, ScenarioChoice } from '@/types/simulation.types'; // Import scenario types
 
 // Placeholder types for simulation - we'll refine these
 type SimulationParams = {
@@ -44,6 +46,11 @@ export default function SimulationPage() {
   });
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // --- Scenario State ---
+  const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
+  const [selectedChoice, setSelectedChoice] = useState<ScenarioChoice | null>(null);
+  // ---------------------
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -53,19 +60,47 @@ export default function SimulationPage() {
     }));
   };
 
+  const handleScenarioSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const scenarioId = e.target.value;
+    const scenario = scenarioData.find(s => s.id === scenarioId) || null;
+    setSelectedScenario(scenario);
+    setSelectedChoice(null); // Reset choice when scenario changes
+    setResult(null); // Clear results when scenario changes
+  };
+
+  const handleChoiceSelect = (choice: ScenarioChoice) => {
+    setSelectedChoice(choice);
+     setResult(null); // Clear results when choice changes
+  };
+
   const runSimulation = async () => {
     setIsLoading(true);
     setResult(null);
-    console.log("Running simulation with params:", params);
+    
+    // --- Apply Scenario Impact --- 
+    let adjustedParams = { ...params }; 
+    let scenarioImpactText = "No scenario applied.";
 
-    // Simulate slight delay for perceived calculation
+    if (selectedScenario && selectedChoice) {
+      const impact = selectedChoice.impact;
+      adjustedParams.initialInvestment += (impact.initialInvestmentChange ?? 0);
+      adjustedParams.initialInvestment -= (impact.oneOffCost ?? 0); // Treat one-off cost as reducing initial investment
+      adjustedParams.initialInvestment += (impact.oneOffIncome ?? 0); // Treat one-off income as adding to initial investment
+      adjustedParams.monthlyContribution += (impact.monthlyContributionChange ?? 0);
+
+      // Ensure params don't go negative where it makes no sense
+      adjustedParams.initialInvestment = Math.max(0, adjustedParams.initialInvestment);
+      adjustedParams.monthlyContribution = Math.max(0, adjustedParams.monthlyContribution);
+
+      scenarioImpactText = `Scenario: ${selectedScenario.title}. Choice: ${selectedChoice.text}.`;
+      console.log("Applied scenario impact:", impact);
+    }
+    console.log("Running simulation with adjusted params:", adjustedParams);
+    // ---------------------------
+
     await new Promise(resolve => setTimeout(resolve, 200)); 
-
-    // Use the actual calculation function
-    const simulationOutput = calculatePortfolioGrowth(params);
-
-    setResult(simulationOutput); // Set the full result including monthly data
-
+    const simulationOutput = calculatePortfolioGrowth(adjustedParams); // Use adjusted params
+    setResult(simulationOutput);
     setIsLoading(false);
   };
 
@@ -127,13 +162,56 @@ export default function SimulationPage() {
                 <option value="aggressive">Aggressive</option>
               </select>
             </div>
+
+            {/* Scenario Selection Section (Add below parameters) */}
+            <div>
+              <label htmlFor="scenarioSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select a life event:</label>
+              <select 
+                 id="scenarioSelect"
+                 value={selectedScenario?.id || ''}
+                 onChange={handleScenarioSelect}
+                 className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+              >
+                 <option value="">-- No Scenario --</option>
+                 {scenarioData.map(s => (
+                   <option key={s.id} value={s.id}>{s.title}</option>
+                 ))}
+              </select>
+            </div>
+
+            {selectedScenario && (
+             <div className="mt-4">
+               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{selectedScenario.description}</p>
+               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your choice:</label>
+               <div className="space-y-2 mt-1">
+                {selectedScenario.choices.map(choice => {
+                  // Calculate checked state separately
+                  const isChecked: boolean = selectedChoice ? selectedChoice.id === choice.id : false;
+                  return (
+                    <label key={choice.id} className={`flex items-center p-2 border rounded cursor-pointer ${isChecked ? 'bg-blue-100 dark:bg-blue-900 border-blue-300 dark:border-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
+                       <input
+                         type="radio"
+                         name="scenarioChoice"
+                         checked={isChecked} // Use intermediate variable
+                         onChange={() => handleChoiceSelect(choice)}
+                         className="mr-2"
+                       />
+                       <span className="text-sm">{choice.text}</span>
+                    </label>
+                  );
+                })}
+              </div>
+             </div>
+            )}
+
             <button
-              onClick={runSimulation}
-              disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-wait"
-            >
-              {isLoading ? 'Simulating...' : 'Run Simulation'}
-            </button>
+                onClick={runSimulation}
+                disabled={isLoading || (selectedScenario && !selectedChoice)}
+                className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                title={selectedScenario && !selectedChoice ? 'Please select a choice for the scenario' : ''}
+              >
+                {isLoading ? 'Simulating...' : 'Run Simulation'}
+              </button>
           </div>
         </div>
 

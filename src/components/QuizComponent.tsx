@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { QuizQuestion } from '@/types/education.types';
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'; // Icons for feedback
 
 interface QuizComponentProps {
   questions: QuizQuestion[];
@@ -20,13 +21,11 @@ const QuizComponent = ({ questions }: QuizComponentProps) => {
   };
 
   const handleSubmit = () => {
-    // Logic to check answers and show results
     setShowResults(true);
-    // In a real app, we might want to prevent changing answers after submit
-    // and potentially save the score/progress.
+    // Reset to first question index to show results from the start
+    setCurrentQuestionIndex(0); 
   };
 
-  // Basic scoring logic
   const calculateScore = () => {
     let correctCount = 0;
     questions.forEach((q) => {
@@ -37,24 +36,74 @@ const QuizComponent = ({ questions }: QuizComponentProps) => {
     return correctCount;
   };
 
-  const score = calculateScore();
-  const currentQuestion = questions[currentQuestionIndex];
+  const handleRetake = () => {
+    setSelectedAnswers({});
+    setShowResults(false);
+    setCurrentQuestionIndex(0);
+  };
 
   if (showResults) {
+    const score = calculateScore();
     return (
       <div className="p-4 border rounded shadow-sm bg-gray-50 dark:bg-gray-700 my-6">
         <h3 className="text-xl font-bold mb-4 text-center">Quiz Results</h3>
-        <p className="text-lg text-center mb-4">You scored {score} out of {questions.length}</p>
-        {/* Optional: Display detailed results per question */} 
+        <p className="text-lg text-center mb-6">You scored {score} out of {questions.length}</p>
+
+        {/* Display detailed feedback for each question */}
+        <div className="space-y-6">
+          {questions.map((q, index) => {
+            const userAnswerIndex = selectedAnswers[q.id];
+            const isCorrect = userAnswerIndex === q.correctAnswerIndex;
+
+            return (
+              <div key={q.id} className="p-3 border-l-4 rounded bg-white dark:bg-gray-800 ${isCorrect ? 'border-green-500' : 'border-red-500'}">
+                <p className="font-semibold mb-2">({index + 1}) {q.questionText}</p>
+                <div className="space-y-2">
+                  {q.options.map((option, optIndex) => {
+                    const isSelected = userAnswerIndex === optIndex;
+                    const isCorrectAnswer = q.correctAnswerIndex === optIndex;
+                    let feedbackIcon = null;
+                    let labelClasses = "flex items-center p-2 border rounded";
+
+                    if (isSelected && isCorrectAnswer) {
+                      feedbackIcon = <CheckCircleIcon className="h-5 w-5 text-green-500 ml-auto" />;
+                      labelClasses += " border-green-400 bg-green-50 dark:bg-green-900/30";
+                    } else if (isSelected && !isCorrectAnswer) {
+                      feedbackIcon = <XCircleIcon className="h-5 w-5 text-red-500 ml-auto" />;
+                      labelClasses += " border-red-400 bg-red-50 dark:bg-red-900/30";
+                    } else if (isCorrectAnswer) {
+                      // Highlight correct answer if user chose wrong or skipped
+                       labelClasses += " border-green-400";
+                       feedbackIcon = <span className="ml-auto text-xs font-medium text-green-600">(Correct Answer)</span>;
+                    } else {
+                      labelClasses += " border-gray-200 dark:border-gray-600";
+                    }
+
+                    return (
+                      <div key={optIndex} className={labelClasses}>
+                         <span className={`mr-2 ${isSelected ? 'font-bold' : ''}`}>{option}</span>
+                         {feedbackIcon}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
         <button 
-          onClick={() => { setShowResults(false); setSelectedAnswers({}); /* Reset state */ }}
-          className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
+          onClick={handleRetake}
+          className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded"
         >
           Retake Quiz
         </button>
       </div>
     );
   }
+
+  if (questions.length === 0) return null; // Handle empty quiz case
+  const currentQuestion = questions[currentQuestionIndex];
 
   return (
     <div className="p-4 border rounded shadow-sm bg-gray-50 dark:bg-gray-700 my-6">

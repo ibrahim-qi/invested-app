@@ -147,32 +147,35 @@ export default function SimulationPage() {
               <p className="text-md">Total Contributions: <span className="font-semibold">£{result.totalContributions.toLocaleString()}</span></p>
               <p className="text-md">Estimated Growth: <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
               
-              {/* Recharts Line Chart */}
-              <div className="mt-6 h-80"> {/* Increased height for chart */}
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={result.monthlyData}
-                    margin={{
-                      top: 5,
-                      right: 30,
-                      left: 20, 
-                      bottom: 5,
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis 
-                      dataKey="month" 
-                      tickFormatter={formatYear} 
-                      // Show ticks roughly every 5 years, adjust interval as needed
-                      interval={Math.max(1, Math.floor(result.monthlyData.length / 10)) * 12} 
-                    />
-                    <YAxis tickFormatter={formatCurrency} width={80} />
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    <Legend />
-                    <Line type="monotone" dataKey="balance" name="Portfolio Balance" stroke="#16a34a" activeDot={{ r: 8 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              {/* Recharts Line Chart - Add check for monthlyData */}
+              {result.monthlyData && result.monthlyData.length > 0 ? (
+                <div className="mt-6 h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={result.monthlyData} // Safe to use now
+                      margin={{
+                        top: 5,
+                        right: 30,
+                        left: 20, 
+                        bottom: 5,
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="month" 
+                        tickFormatter={formatYear} 
+                        interval={Math.max(1, Math.floor(result.monthlyData.length / 10)) * 12} // Safe to use now
+                      />
+                      <YAxis tickFormatter={formatCurrency} width={80} />
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Legend />
+                      <Line type="monotone" dataKey="balance" name="Portfolio Balance" stroke="#16a34a" activeDot={{ r: 8 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                 <p className="text-gray-500 mt-6">Chart data is unavailable.</p>
+              )}
             </div>
           )}
           {!result && !isLoading && (

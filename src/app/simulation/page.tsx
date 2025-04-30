@@ -14,7 +14,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import type { Scenario as AppScenario, ScenarioChoice as AppScenarioChoice } from '@/types/simulation.types'; // Import scenario types
-import { createClient } from '@/lib/supabaseClient'; // Import client-side client
+import { createClient } from '@/lib/supabase/client'; // Import client-side client
 import type { User } from '@supabase/supabase-js'; // Import User type
 import type { Database } from '@/lib/database.types'; // Import full DB types
 import { useSearchParams } from 'next/navigation'; // Import useSearchParams

@@ -1,4 +1,4 @@
-import { createSupabaseServerClient } from '@/lib/supabaseClient';
+import { createServerClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Database } from '@/lib/database.types'; // Import full DB types
@@ -10,7 +10,7 @@ type SavedSimulation = Database['public']['Tables']['saved_simulations']['Row'];
 type Module = Database['public']['Tables']['learning_modules']['Row'];
 
 export default async function DashboardPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = createServerClient();
 
   const { data: { user } } = await supabase.auth.getUser();
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { createClient } from '@/lib/supabaseClient' // Our client-side client
+import { createClient } from '@/lib/supabase/client' // Our client-side client
 import { Auth } from '@supabase/auth-ui-react'
 import { ThemeSupa } from '@supabase/auth-ui-shared' // Default theme
 import { useRouter } from 'next/navigation'

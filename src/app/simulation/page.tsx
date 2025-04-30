@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { calculatePortfolioGrowth } from '@/lib/simulationUtils'; // Import the new calculation function
 // Import Recharts components
 import {
@@ -13,10 +13,14 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { scenarioData } from '@/lib/scenarioData'; // Import scenario data
-import type { Scenario, ScenarioChoice } from '@/types/simulation.types'; // Import scenario types
+import type { Scenario as AppScenario, ScenarioChoice as AppScenarioChoice } from '@/types/simulation.types'; // Import scenario types
 import { createClient } from '@/lib/supabaseClient'; // Import client-side client
 import type { User } from '@supabase/supabase-js'; // Import User type
+import type { Database } from '@/lib/database.types'; // Import full DB types
+
+// DB Types
+type DbScenario = Database['public']['Tables']['scenarios']['Row'];
+type DbScenarioChoice = Database['public']['Tables']['scenario_choices']['Row'];
 
 // Placeholder types for simulation - we'll refine these
 type SimulationParams = {
@@ -51,8 +55,11 @@ export default function SimulationPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   // --- Scenario State ---
-  const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null);
-  const [selectedChoice, setSelectedChoice] = useState<ScenarioChoice | null>(null);
+  const [scenarios, setScenarios] = useState<DbScenario[]>([]); // Store fetched scenarios
+  const [scenarioChoices, setScenarioChoices] = useState<DbScenarioChoice[]>([]); // Store fetched choices
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>(''); // Store ID, not object
+  const [selectedChoiceId, setSelectedChoiceId] = useState<string>(''); // Store ID, not object
+  const [scenarioError, setScenarioError] = useState<string | null>(null);
   // ---------------------
 
   // --- State for Save Functionality ---
@@ -82,7 +89,61 @@ export default function SimulationPage() {
     };
 
   }, [supabase]);
-  // -------------------------------------
+
+  // --- Fetch Scenarios and Choices --- 
+  useEffect(() => {
+    const fetchScenarioData = async () => {
+      setScenarioError(null);
+      try {
+          const { data: scenariosData, error: scenariosError } = await supabase
+            .from('scenarios')
+            .select('*')
+            .order('scenario_order', { ascending: true });
+          if (scenariosError) throw scenariosError;
+          setScenarios(scenariosData || []);
+
+          const { data: choicesData, error: choicesError } = await supabase
+            .from('scenario_choices')
+            .select('*')
+            .order('choice_order', { ascending: true }); // Order globally first
+          if (choicesError) throw choicesError;
+          setScenarioChoices(choicesData || []);
+
+      } catch (error: any) {
+          console.error("Error fetching scenario data:", error.message);
+          setScenarioError("Failed to load scenarios. Please try refreshing.");
+      }
+    };
+    fetchScenarioData();
+  }, [supabase]);
+  // ----------------------------------
+
+  // Memoize derived scenario objects to avoid recalculation on every render
+  const selectedScenario = useMemo(() => {
+      if (!selectedScenarioId) return null;
+      return scenarios.find(s => s.id === selectedScenarioId);
+  }, [selectedScenarioId, scenarios]);
+
+  const choicesForSelectedScenario = useMemo(() => {
+      if (!selectedScenarioId) return [];
+      return scenarioChoices.filter(c => c.scenario_id === selectedScenarioId);
+  }, [selectedScenarioId, scenarioChoices]);
+
+  const selectedChoice = useMemo(() => {
+      if (!selectedChoiceId) return null;
+      // IMPORTANT: Parse the JSON impact here when the choice is selected/derived
+      const choice = scenarioChoices.find(c => c.id === selectedChoiceId);
+      if (!choice) return null;
+      try {
+        const impact = choice.impact as AppScenarioChoice['impact']; // Assuming structure matches
+        // Add validation for impact structure if needed
+        return { ...choice, impact }; // Return choice with parsed impact
+      } catch (e) {
+        console.error("Error parsing scenario choice impact JSON:", e);
+        return null; // Or handle error appropriately
+      }
+  }, [selectedChoiceId, scenarioChoices]);
+  // --------------------------------------------------------
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -93,16 +154,14 @@ export default function SimulationPage() {
   };
 
   const handleScenarioSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const scenarioId = e.target.value;
-    const scenario = scenarioData.find(s => s.id === scenarioId) || null;
-    setSelectedScenario(scenario);
-    setSelectedChoice(null); // Reset choice when scenario changes
-    setResult(null); // Clear results when scenario changes
+    setSelectedScenarioId(e.target.value);
+    setSelectedChoiceId(''); // Reset choice ID
+    setResult(null); 
   };
 
-  const handleChoiceSelect = (choice: ScenarioChoice) => {
-    setSelectedChoice(choice);
-     setResult(null); // Clear results when choice changes
+  const handleChoiceSelect = (choiceId: string) => {
+    setSelectedChoiceId(choiceId);
+    setResult(null);
   };
 
   const runSimulation = async () => {
@@ -248,12 +307,12 @@ export default function SimulationPage() {
               <label htmlFor="scenarioSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Select a life event:</label>
               <select 
                  id="scenarioSelect"
-                 value={selectedScenario?.id || ''}
+                 value={selectedScenarioId}
                  onChange={handleScenarioSelect}
                  className="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               >
                  <option value="">-- No Scenario --</option>
-                 {scenarioData.map(s => (
+                 {scenarios.map(s => (
                    <option key={s.id} value={s.id}>{s.title}</option>
                  ))}
               </select>
@@ -264,16 +323,15 @@ export default function SimulationPage() {
                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{selectedScenario.description}</p>
                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Your choice:</label>
                <div className="space-y-2 mt-1">
-                {selectedScenario.choices.map(choice => {
-                  // Calculate checked state separately
-                  const isChecked: boolean = selectedChoice ? selectedChoice.id === choice.id : false;
+                {choicesForSelectedScenario.map(choice => {
+                  const isChecked = selectedChoiceId === choice.id;
                   return (
                     <label key={choice.id} className={`flex items-center p-2 border rounded cursor-pointer ${isChecked ? 'bg-blue-100 dark:bg-blue-900 border-blue-300 dark:border-blue-700' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}>
                        <input
                          type="radio"
                          name="scenarioChoice"
-                         checked={isChecked} // Use intermediate variable
-                         onChange={() => handleChoiceSelect(choice)}
+                         checked={isChecked}
+                         onChange={() => handleChoiceSelect(choice.id)}
                          className="mr-2"
                        />
                        <span className="text-sm">{choice.text}</span>
@@ -286,9 +344,9 @@ export default function SimulationPage() {
 
             <button
                 onClick={runSimulation}
-                disabled={Boolean(isLoading || (selectedScenario && !selectedChoice))}
+                disabled={Boolean(isLoading || (selectedScenario && !selectedChoiceId))}
                 className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                title={selectedScenario && !selectedChoice ? 'Please select a choice for the scenario' : ''}
+                title={selectedScenario && !selectedChoiceId ? 'Please select a choice for the scenario' : ''}
               >
                 {isLoading ? 'Simulating...' : 'Run Simulation'}
               </button>

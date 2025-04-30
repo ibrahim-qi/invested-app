@@ -1,29 +1,162 @@
-import { learningModulesData } from '@/lib/learningModulesData';
-import type { ContentBlock } from '@/types/education.types';
 import { notFound } from 'next/navigation';
-import Image from 'next/image'; // For handling image blocks
-import Tooltip from '@/components/Tooltip'; // Import Tooltip
-import { glossaryData } from '@/lib/glossaryData'; // Import Glossary Data
-import React from 'react'; // Import React for fragments
-import QuizComponent from '@/components/QuizComponent'; // Import QuizComponent
-import { createSupabaseServerClient } from '@/lib/supabaseClient'; // Import server client
-import MarkCompleteButton from '@/components/MarkCompleteButton'; // Import the button
+import Image from 'next/image';
+import Tooltip from '@/components/Tooltip';
+import React from 'react';
+import QuizComponent from '@/components/QuizComponent';
+import { createSupabaseServerClient } from '@/lib/supabaseClient';
+import MarkCompleteButton from '@/components/MarkCompleteButton';
+import type { Database } from '@/lib/database.types';
 
-// Function to generate static paths at build time (optional but good for performance)
-export async function generateStaticParams() {
-  return learningModulesData.map((module) => ({
-    moduleId: module.id,
-  }));
+// Define types based on DB schema
+type Module = Database['public']['Tables']['learning_modules']['Row'];
+type Lesson = Database['public']['Tables']['lessons']['Row'];
+type DbContentBlock = Database['public']['Tables']['content_blocks']['Row'];
+type GlossaryTerm = Database['public']['Tables']['glossary']['Row'];
+
+// Type guard for ContentBlock JSON parsing
+// This needs to align EXACTLY with src/types/education.types.ts ContentBlock union
+import type { ContentBlock as AppContentBlock, QuizQuestion } from '@/types/education.types';
+function isValidAppContentBlock(obj: any): obj is AppContentBlock {
+  if (!obj || typeof obj !== 'object') return false;
+  switch (obj.type) {
+    case 'text':
+      return typeof obj.content === 'string';
+    case 'heading':
+      return typeof obj.level === 'number' && typeof obj.content === 'string';
+    case 'image':
+      return typeof obj.src === 'string' && typeof obj.alt === 'string';
+    case 'video':
+       return typeof obj.src === 'string';
+    case 'quiz':
+       return Array.isArray(obj.questions) && obj.questions.every((q: any) => 
+         typeof q.id === 'string' && 
+         typeof q.questionText === 'string' && 
+         Array.isArray(q.options) && 
+         typeof q.correctAnswerIndex === 'number'
+       );
+    // Add 'diagram' case later if implemented
+    default:
+      return false;
+  }
 }
 
-// Generate a regex to find glossary terms (case-insensitive)
-const glossaryTerms = Array.from(glossaryData.keys());
-// Escape regex special characters in terms before joining
-const escapedTerms = glossaryTerms.map(term => term.replace(/[.*+?^${}()|[\\]]/g, '\\$&'));
-const glossaryRegex = new RegExp(`\\b(${escapedTerms.join('|')})\\b`, 'gi');
 
-// Helper component to render individual content blocks
-const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
+// Fetch data function
+async function getModuleData(moduleId: string) {
+  const supabase = createSupabaseServerClient();
+  
+  // Fetch module
+  const { data: moduleData, error: moduleError } = await supabase
+    .from('learning_modules')
+    .select('*')
+    .eq('id', moduleId)
+    .single();
+
+  if (moduleError || !moduleData) return { module: null, lessons: [], glossary: new Map(), completedLessonIds: new Set<string>(), userId: null };
+
+  // Fetch lessons for this module, ordered
+  const { data: lessonsData, error: lessonsError } = await supabase
+    .from('lessons')
+    .select('*')
+    .eq('module_id', moduleId)
+    .order('lesson_order', { ascending: true });
+
+  if (lessonsError) {
+     console.error("Error fetching lessons:", lessonsError.message);
+     return { module: moduleData, lessons: [], glossary: new Map(), completedLessonIds: new Set<string>(), userId: null }; // Return module even if lessons fail
+  }
+  const lessons = lessonsData || [];
+
+  // Fetch content blocks for these lessons, ordered
+  const lessonIds = lessons.map(l => l.id);
+  const { data: blocksData, error: blocksError } = await supabase
+    .from('content_blocks')
+    .select('*')
+    .in('lesson_id', lessonIds)
+    .order('block_order', { ascending: true });
+
+  if (blocksError) console.error("Error fetching content blocks:", blocksError.message);
+  const dbContentBlocks = blocksData || [];
+
+  // Group blocks by lesson_id and parse JSON content
+  const lessonsWithContent = lessons.map(lesson => {
+    const blocksForLesson = dbContentBlocks
+      .filter(block => block.lesson_id === lesson.id)
+      .map(dbBlock => {
+          try {
+            // *** IMPORTANT: Parse the JSONB content ***
+            const parsedContent = dbBlock.content as AppContentBlock; 
+            // Add validation if necessary, using isValidAppContentBlock
+            if (isValidAppContentBlock(parsedContent) && parsedContent.type === dbBlock.block_type) {
+                 return parsedContent; // Return the parsed AppContentBlock object
+            } else {
+                 console.warn(`Invalid content block structure or type mismatch for block ID ${dbBlock.id}:`, dbBlock.content);
+                 return null;
+            }
+          } catch (e) {
+            console.error(`Error parsing content block JSON for block ID ${dbBlock.id}:`, e);
+            return null;
+          }
+      })
+      .filter((block): block is AppContentBlock => block !== null); // Filter out nulls and assert type
+      
+    return { ...lesson, contentBlocks: blocksForLesson }; // Combine lesson meta with parsed blocks
+  });
+
+  // Fetch glossary
+  const { data: glossaryData, error: glossaryError } = await supabase
+    .from('glossary')
+    .select('term, definition');
+  if (glossaryError) console.error("Error fetching glossary:", glossaryError.message);
+  const glossaryMap = new Map<string, string>();
+  (glossaryData || []).forEach(item => glossaryMap.set(item.term.toLowerCase(), item.definition));
+
+  // Fetch user progress (existing logic, slightly adapted)
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  let completedLessonIds = new Set<string>();
+  if (userId) {
+    const { data: progressData, error: progressError } = await supabase
+      .from('user_lesson_progress')
+      .select('lesson_id')
+      .eq('user_id', userId)
+      .eq('module_id', moduleId);
+    if (progressError) {
+      console.error('Error fetching lesson progress for module:', progressError.message);
+    } else if (progressData) {
+      completedLessonIds = new Set(progressData.map(p => p.lesson_id));
+    }
+  }
+
+  return {
+    module: moduleData,
+    lessons: lessonsWithContent,
+    glossary: glossaryMap,
+    completedLessonIds,
+    userId
+  };
+}
+
+// Regenerate static paths (optional, based on DB data)
+export async function generateStaticParams() {
+    const supabase = createSupabaseServerClient();
+    const { data, error } = await supabase.from('learning_modules').select('id');
+    if (error || !data) return [];
+    return data.map((module) => ({ moduleId: module.id }));
+}
+
+// --- RenderContentBlock Component --- 
+// Needs glossary passed down or fetched/imported if kept separate
+let glossaryRegex: RegExp; // Keep regex generation logic
+
+const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, glossary: Map<string, string> }) => {
+    // Regenerate regex if glossary changes (or generate once outside)
+    if (!glossaryRegex || glossaryRegex.source !== `\\b(${Array.from(glossary.keys()).map(term => term.replace(/[.*+?^${}()|[\\]]/g, '\\$&')).join('|')})\\b`) {
+        const glossaryTerms = Array.from(glossary.keys());
+        const escapedTerms = glossaryTerms.map(term => term.replace(/[.*+?^${}()|[\\]]/g, '\\$&'));
+        glossaryRegex = new RegExp(`\\b(${escapedTerms.join('|')})\\b`, 'gi');
+    }
+
   switch (block.type) {
     case 'heading':
       // Explicitly handle heading levels
@@ -38,20 +171,17 @@ const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
       return (
         <p className="my-2 text-gray-700 dark:text-gray-300">
           {parts.map((part, index) => {
-            // Check if the part is a glossary term (case-insensitive)
             const lowerCasePart = part?.toLowerCase();
-            const isGlossaryTerm = glossaryTerms.some(term => term.toLowerCase() === lowerCasePart);
-
-            if (isGlossaryTerm && glossaryData.has(lowerCasePart)) {
+            const isGlossaryTerm = glossary.has(lowerCasePart); // Check against map
+            if (isGlossaryTerm) {
               return (
-                <Tooltip key={index} text={glossaryData.get(lowerCasePart)!}>
+                <Tooltip key={index} text={glossary.get(lowerCasePart)!}>
                   <span className="font-semibold text-blue-600 dark:text-blue-400 cursor-help border-b border-dotted border-blue-600 dark:border-blue-400">
                     {part} {/* Display original casing */}
                   </span>
                 </Tooltip>
               );
             } else {
-              // Regular text part
               return <React.Fragment key={index}>{part}</React.Fragment>;
             }
           })}
@@ -83,66 +213,51 @@ const RenderContentBlock = ({ block }: { block: ContentBlock }) => {
   }
 };
 
+// --- Main Page Component --- 
 export default async function ModulePage({ params }: { params: { moduleId: string } }) {
-  const supabase = createSupabaseServerClient();
-  const module = learningModulesData.find(m => m.id === params.moduleId);
+  const { module, lessons, glossary, completedLessonIds, userId } = await getModuleData(params.moduleId);
 
   if (!module) {
-    notFound(); // Show 404 page if module ID is invalid
+    notFound(); 
   }
-
-  // --- Fetch user progress for this module --- 
-  const { data: { session } } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
-  let completedLessonIds = new Set<string>();
-
-  if (userId) {
-    const { data: progressData, error } = await supabase
-      .from('user_lesson_progress')
-      .select('lesson_id')
-      .eq('user_id', userId)
-      .eq('module_id', params.moduleId); // Filter by current module
-
-    if (error) {
-      console.error('Error fetching lesson progress for module:', error.message);
-    } else if (progressData) {
-      completedLessonIds = new Set(progressData.map(p => p.lesson_id));
-    }
-  }
-  // -------------------------------------------
 
   return (
     <article className="prose dark:prose-invert max-w-none">
-      <h1 className="text-3xl font-bold mb-4 border-b pb-2">{module.title}</h1>
-      <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">{module.description}</p>
+       {/* ... Title, Description (use module.title etc) ... */}
+       <h1 className="text-3xl font-bold mb-4 border-b pb-2">{module.title}</h1>
+       <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">{module.description}</p>
 
-      {module.lessons.map((lesson, lessonIndex) => {
+      {lessons.map((lesson, lessonIndex) => {
         const isLessonComplete = completedLessonIds.has(lesson.id);
         return (
           <section key={lesson.id} className="mb-8 p-4 border rounded shadow-sm relative">
-            {isLessonComplete && (
-               <span className="absolute top-2 right-2 text-xs text-green-600 font-semibold">Completed</span>
-            )}
-            <h2 className="text-2xl font-bold mb-4">Lesson {lessonIndex + 1}: {lesson.title}</h2>
-            <p className="text-sm text-gray-500 mb-4">Estimated time: {lesson.estimatedTimeMinutes} minutes</p>
-            <div>
-              {lesson.contentBlocks.map((block, blockIndex) => (
-                <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} />
-              ))}
-            </div>
-            {userId && (
-              <MarkCompleteButton 
-                userId={userId} 
-                moduleId={module.id} 
-                lessonId={lesson.id} 
-                isInitiallyComplete={isLessonComplete} 
-              />
-            )}
+             {/* ... Completed span ... */}
+             {isLessonComplete && (
+                <span className="absolute top-2 right-2 text-xs text-green-600 font-semibold">Completed</span>
+             )}
+             {/* ... Lesson Title, Time ... */}
+             <h2 className="text-2xl font-bold mb-4">Lesson {lessonIndex + 1}: {lesson.title}</h2>
+             <p className="text-sm text-gray-500 mb-4">Estimated time: {lesson.estimated_time_minutes} minutes</p>
+
+              <div>
+                 {/* Pass glossary map to renderer */} 
+                {lesson.contentBlocks.map((block, blockIndex) => (
+                  <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} glossary={glossary} />
+                ))}
+              </div>
+
+              {/* Mark Complete Button (pass DB module.id) */}
+              {userId && (
+                <MarkCompleteButton 
+                  userId={userId} 
+                  moduleId={module.id} // Use module.id from DB
+                  lessonId={lesson.id} 
+                  isInitiallyComplete={isLessonComplete} 
+                />
+              )}
           </section>
         )
       })}
-
-      {/* Add navigation (Next/Prev Lesson) later */}
     </article>
   );
 } 

@@ -46,6 +46,7 @@ function isValidAppContentBlock(obj: any): obj is AppContentBlock {
 
 // Fetch data function
 async function getModuleData(moduleId: string) {
+  console.log(`Fetching data for module: ${moduleId}`); // Log module ID
   const supabase = createServerClient();
   
   // Fetch module
@@ -55,7 +56,11 @@ async function getModuleData(moduleId: string) {
     .eq('id', moduleId)
     .single();
 
-  if (moduleError || !moduleData) return { module: null, lessons: [], glossary: new Map(), completedLessonIds: new Set<string>(), userId: null };
+  if (moduleError || !moduleData) { 
+    console.log('Module fetch failed or not found.');
+    return { module: null, lessons: [], glossary: new Map(), completedLessonIds: new Set<string>(), userId: null };
+  }
+  console.log('Fetched module:', moduleData.title);
 
   // Fetch lessons for this module, ordered
   const { data: lessonsData, error: lessonsError } = await supabase
@@ -69,6 +74,7 @@ async function getModuleData(moduleId: string) {
      return { module: moduleData, lessons: [], glossary: new Map(), completedLessonIds: new Set<string>(), userId: null }; // Return module even if lessons fail
   }
   const lessons = lessonsData || [];
+  console.log(`Fetched ${lessons.length} lessons.`);
 
   // Fetch content blocks for these lessons, ordered
   const lessonIds = lessons.map(l => l.id);
@@ -80,29 +86,32 @@ async function getModuleData(moduleId: string) {
 
   if (blocksError) console.error("Error fetching content blocks:", blocksError.message);
   const dbContentBlocks = blocksData || [];
+  console.log(`Fetched ${dbContentBlocks.length} raw content blocks.`);
 
   // Group blocks by lesson_id and parse JSON content
   const lessonsWithContent = lessons.map(lesson => {
+    console.log(`Processing lesson: ${lesson.title}`); 
     const blocksForLesson = dbContentBlocks
       .filter(block => block.lesson_id === lesson.id)
       .map(dbBlock => {
+          console.log(`  Raw content for block ID ${dbBlock.id}:`, typeof dbBlock.content, dbBlock.content); // Log type and value before try/catch
           try {
-            // *** IMPORTANT: Parse the JSONB content ***
             const parsedContent = dbBlock.content as AppContentBlock; 
-            // Add validation if necessary, using isValidAppContentBlock
-            if (isValidAppContentBlock(parsedContent) && parsedContent.type === dbBlock.block_type) {
-                 return parsedContent; // Return the parsed AppContentBlock object
+            if (isValidAppContentBlock(parsedContent)) { 
+                 // console.log(`  Successfully parsed block ID ${dbBlock.id}, type: ${parsedContent.type}`);
+                 return parsedContent; 
             } else {
-                 console.warn(`Invalid content block structure or type mismatch for block ID ${dbBlock.id}:`, dbBlock.content);
+                 console.warn(`  Invalid content block structure for block ID ${dbBlock.id}:`, { parsedContent });
                  return null;
             }
           } catch (e) {
-            console.error(`Error parsing content block JSON for block ID ${dbBlock.id}:`, e);
+            console.error(`  Error parsing content block JSON for block ID ${dbBlock.id}:`, e);
             return null;
           }
       })
       .filter((block): block is AppContentBlock => block !== null); // Filter out nulls and assert type
       
+    console.log(`  Found ${blocksForLesson.length} valid content blocks for this lesson.`); // Log valid blocks per lesson
     return { ...lesson, contentBlocks: blocksForLesson }; // Combine lesson meta with parsed blocks
   });
 
@@ -256,12 +265,15 @@ export default async function ModulePage({ params }: { params: { moduleId: strin
   }
   // -----------------------------
 
-  // Now fetch module data (user is authenticated)
+  console.log(`Rendering ModulePage for: ${params.moduleId}`); // Log page render start
   const { module, lessons, glossary, completedLessonIds, userId } = await getModuleData(params.moduleId);
 
   if (!module) {
+    console.log(`Module not found, rendering 404.`);
     notFound(); 
   }
+
+  console.log(`Rendering ${lessons.length} lessons.`); // Log number of lessons to render
 
   return (
     <article className="prose dark:prose-invert max-w-none">
@@ -270,6 +282,7 @@ export default async function ModulePage({ params }: { params: { moduleId: strin
        <p className="text-lg text-gray-600 dark:text-gray-400 mb-6">{module.description}</p>
 
       {lessons.map((lesson, lessonIndex) => {
+        console.log(`Rendering lesson section: ${lesson.title}`); // Log lesson section render
         const isLessonComplete = completedLessonIds.has(lesson.id);
         return (
           <section key={lesson.id} className="mb-8 p-4 border rounded shadow-sm relative">
@@ -283,9 +296,11 @@ export default async function ModulePage({ params }: { params: { moduleId: strin
 
               <div>
                  {/* Pass glossary map to renderer */} 
-                {lesson.contentBlocks.map((block, blockIndex) => (
-                  <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} glossary={glossary} />
-                ))}
+                {lesson.contentBlocks.length === 0 && <p className="text-sm text-gray-500 italic">[No content blocks found for this lesson]</p>} {/* Add placeholder if no blocks */}
+                {lesson.contentBlocks.map((block, blockIndex) => {
+                  // console.log(`  Rendering block ${blockIndex}, type: ${block.type}`); // Optional: verbose block rendering log
+                  return <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} glossary={glossary} />;
+                })}
               </div>
 
               {/* Mark Complete Button (pass DB module.id) */}

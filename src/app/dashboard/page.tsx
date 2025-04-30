@@ -1,11 +1,13 @@
 import { createSupabaseServerClient } from '@/lib/supabaseClient';
 import { redirect } from 'next/navigation';
-import { learningModulesData } from '@/lib/learningModulesData';
 import Link from 'next/link';
 import type { Database } from '@/lib/database.types'; // Import full DB types
+import DeleteSimulationButton from '@/components/DeleteSimulationButton'; // Import delete button
 
 // Define a type for the saved simulation data we fetch
 type SavedSimulation = Database['public']['Tables']['saved_simulations']['Row'];
+// Also need the Module type for the loop below
+type Module = Database['public']['Tables']['learning_modules']['Row'];
 
 export default async function DashboardPage() {
   const supabase = createSupabaseServerClient();
@@ -46,11 +48,44 @@ export default async function DashboardPage() {
     savedSimulations = simData;
   }
 
+  // --- Fetch Modules for Recommendation Logic --- 
+  const { data: modulesData, error: modulesError } = await supabase
+    .from('learning_modules')
+    .select('id, title, description') // Fetch needed fields
+    .order('module_order', { ascending: true });
+  
+  if (modulesError) {
+      console.error("Error fetching learning modules for dashboard:", modulesError.message);
+      // Handle error - maybe don't show recommendations
+  }
+  const modules: Pick<Module, 'id' | 'title' | 'description'>[] = modulesData || [];
+  // ---------------------------------------------
+
+  // --- Fetch All Lessons for Recommendation Logic --- 
+  // We need lesson IDs associated with modules to determine completion
+  const { data: allLessonsData, error: lessonsError } = await supabase
+      .from('lessons')
+      .select('id, module_id');
+
+  if (lessonsError) {
+      console.error("Error fetching lessons for dashboard:", lessonsError.message);
+      // Handle error
+  }
+  const allLessons: {id: string, module_id: string}[] = allLessonsData || [];
+  const moduleToLessonIdsMap = new Map<string, string[]>();
+  allLessons.forEach(lesson => {
+      if (!moduleToLessonIdsMap.has(lesson.module_id)) {
+          moduleToLessonIdsMap.set(lesson.module_id, []);
+      }
+      moduleToLessonIdsMap.get(lesson.module_id)?.push(lesson.id);
+  });
+  // ---------------------------------------------------
+
   // Find the next recommended module (first one not fully completed)
-  let recommendedModule = null;
-  for (const module of learningModulesData) {
-    const allLessons = module.lessons.map(l => l.id);
-    const isModuleComplete = allLessons.every(lessonId => completedLessonIds.has(lessonId));
+  let recommendedModule: Pick<Module, 'id' | 'title' | 'description'> | null = null;
+  for (const module of modules) {
+    const moduleLessonIds = moduleToLessonIdsMap.get(module.id) || [];
+    const isModuleComplete = moduleLessonIds.length > 0 && moduleLessonIds.every((lessonId: string) => completedLessonIds.has(lessonId)); // Explicit type
     if (!isModuleComplete) {
       recommendedModule = module;
       break; // Found the first incomplete module
@@ -95,13 +130,15 @@ export default async function DashboardPage() {
             <ul className="space-y-4">
               {savedSimulations.map((sim) => (
                 <li key={sim.id} className="p-4 border rounded-lg shadow-sm bg-white dark:bg-gray-800">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      {new Date(sim.created_at).toLocaleDateString()} - {new Date(sim.created_at).toLocaleTimeString()}
-                    </span>
-                    {/* Add Delete button later */}
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <span className="block text-sm font-medium text-gray-500 dark:text-gray-400">
+                        {new Date(sim.created_at).toLocaleDateString()} - {new Date(sim.created_at).toLocaleTimeString()}
+                      </span>
+                      {sim.simulation_name && <p className="font-semibold text-lg mb-1">{sim.simulation_name}</p>}
+                    </div>
+                    <DeleteSimulationButton simulationId={sim.id} userId={user.id} />
                   </div>
-                  {sim.simulation_name && <p className="font-semibold text-lg mb-1">{sim.simulation_name}</p>}
                   <p className="text-sm">Params: £{sim.initial_investment} initial, £{sim.monthly_contribution}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
                   {sim.scenario_id && <p className="text-xs italic text-gray-600 dark:text-gray-400">Scenario applied</p>}
                   <p className="mt-2 text-lg font-bold text-green-600 dark:text-green-400">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>

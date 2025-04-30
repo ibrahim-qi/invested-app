@@ -71,7 +71,9 @@ export default async function LearnPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {modules.map((module) => {
           const moduleLessonIds = moduleLessonsMap.get(module.id) || [];
-          const isModuleComplete = userId && moduleLessonIds.length > 0 && moduleLessonIds.every(lessonId => completedLessonIds.has(lessonId));
+          const totalLessonsInModule = moduleLessonIds.length;
+          const completedLessonsInModule = moduleLessonIds.filter(lessonId => completedLessonIds.has(lessonId)).length;
+          const isModuleComplete = userId && totalLessonsInModule > 0 && completedLessonsInModule === totalLessonsInModule;
 
           return (
             <Link key={module.id} href={`/learn/${module.id}`} legacyBehavior>
@@ -82,9 +84,19 @@ export default async function LearnPage() {
                 <h2 className="mb-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
                   {module.title}
                 </h2>
-                <p className="font-normal text-gray-700 dark:text-gray-400">
+                <p className="font-normal text-gray-700 dark:text-gray-400 mb-3">
                   {module.description}
                 </p>
+                {userId && totalLessonsInModule > 0 && (
+                   <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
+                       {completedLessonsInModule} / {totalLessonsInModule} Lessons Completed
+                   </div>
+                )}
+                {!userId && totalLessonsInModule > 0 && (
+                   <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
+                       {totalLessonsInModule} Lessons
+                   </div>
+                )}
               </a>
             </Link>
           );

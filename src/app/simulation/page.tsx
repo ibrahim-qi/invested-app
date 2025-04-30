@@ -199,6 +199,13 @@ export default function SimulationPage() {
   const handleSaveSimulation = async () => {
     if (!user || !result || isSaving) return;
 
+    // *** Ask for optional name ***
+    const simulationName = prompt("Enter an optional name for this simulation:", 
+                                `Sim - ${new Date().toLocaleDateString()}` // Default name
+                           );
+    // If user cancels prompt, simulationName will be null. We proceed anyway.
+    // ---------------------------
+
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -219,7 +226,7 @@ export default function SimulationPage() {
       .from('saved_simulations')
       .insert({
         user_id: user.id,
-        // simulation_name: prompt("Enter a name for this simulation (optional):"), // Optional: Get name
+        simulation_name: simulationName, // Use the name from prompt (or null if cancelled)
         initial_investment: adjustedParams.initialInvestment,
         monthly_contribution: adjustedParams.monthlyContribution,
         time_horizon_years: adjustedParams.timeHorizonYears,

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { calculatePortfolioGrowth } from '@/lib/simulationUtils'; // Import the new calculation function
 // Import Recharts components
 import {
@@ -17,6 +17,7 @@ import type { Scenario as AppScenario, ScenarioChoice as AppScenarioChoice } fro
 import { createClient } from '@/lib/supabaseClient'; // Import client-side client
 import type { User } from '@supabase/supabase-js'; // Import User type
 import type { Database } from '@/lib/database.types'; // Import full DB types
+import { useSearchParams } from 'next/navigation'; // Import useSearchParams
 
 // DB Types
 type DbScenario = Database['public']['Tables']['scenarios']['Row'];
@@ -43,33 +44,45 @@ const formatCurrency = (value: number) => `£${value.toLocaleString()}`;
 // Helper to format X-axis ticks from months to years
 const formatYear = (month: number) => `Year ${Math.floor(month / 12)}`;
 
-export default function SimulationPage() {
-  const supabase = createClient(); // Use client-side client
-  const [params, setParams] = useState<SimulationParams>({
-    initialInvestment: 1000,
-    monthlyContribution: 100,
-    timeHorizonYears: 10,
-    riskLevel: 'moderate',
-  });
+// --- Component to Read Query Params --- 
+// Needs to be separate because useSearchParams requires Suspense boundary
+function SimulationContent() {
+  const supabase = createClient();
+  const searchParams = useSearchParams();
+
+  // Function to get initial state from search params or defaults
+  const getInitialParams = (): SimulationParams => {
+    return {
+      initialInvestment: parseFloat(searchParams.get('initialInvestment') || '1000'),
+      monthlyContribution: parseFloat(searchParams.get('monthlyContribution') || '100'),
+      timeHorizonYears: parseInt(searchParams.get('timeHorizonYears') || '10', 10),
+      riskLevel: (searchParams.get('riskLevel') as SimulationParams['riskLevel']) || 'moderate',
+    };
+  };
+  
+  // Function to get initial scenario state from search params
+  const getInitialScenarioIds = (): { scenarioId: string; choiceId: string } => {
+      return {
+          scenarioId: searchParams.get('scenarioId') || '',
+          choiceId: searchParams.get('scenarioChoiceId') || '',
+      };
+  };
+
+  // Initialize state with values from URL params or defaults
+  const [params, setParams] = useState<SimulationParams>(getInitialParams());
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  
-  // --- Scenario State ---
-  const [scenarios, setScenarios] = useState<DbScenario[]>([]); // Store fetched scenarios
-  const [scenarioChoices, setScenarioChoices] = useState<DbScenarioChoice[]>([]); // Store fetched choices
-  const [selectedScenarioId, setSelectedScenarioId] = useState<string>(''); // Store ID, not object
-  const [selectedChoiceId, setSelectedChoiceId] = useState<string>(''); // Store ID, not object
+  const [scenarios, setScenarios] = useState<DbScenario[]>([]);
+  const [scenarioChoices, setScenarioChoices] = useState<DbScenarioChoice[]>([]);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>(getInitialScenarioIds().scenarioId);
+  const [selectedChoiceId, setSelectedChoiceId] = useState<string>(getInitialScenarioIds().choiceId);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
-  // ---------------------
-
-  // --- State for Save Functionality ---
   const [user, setUser] = useState<User | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  // ----------------------------------
 
-  // --- Fetch user session on mount --- 
+  // --- Fetch User (existing useEffect) --- 
   useEffect(() => {
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
@@ -90,7 +103,7 @@ export default function SimulationPage() {
 
   }, [supabase]);
 
-  // --- Fetch Scenarios and Choices --- 
+  // --- Fetch Scenarios (existing useEffect) --- 
   useEffect(() => {
     const fetchScenarioData = async () => {
       setScenarioError(null);
@@ -116,7 +129,17 @@ export default function SimulationPage() {
     };
     fetchScenarioData();
   }, [supabase]);
-  // ----------------------------------
+
+  // --- Auto-run simulation if params loaded from URL --- 
+  useEffect(() => {
+      // Check if *any* known query param exists to indicate loading
+      if (searchParams.has('initialInvestment')) {
+          console.log("Running simulation automatically from loaded parameters...");
+          runSimulation();
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount after initial params are set
+  // -----------------------------------------------------
 
   // Memoize derived scenario objects to avoid recalculation on every render
   const selectedScenario = useMemo(() => {
@@ -422,5 +445,16 @@ export default function SimulationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// --- Main Exported Component with Suspense Boundary --- 
+export default function SimulationPage() {
+  // useSearchParams needs to be wrapped in <Suspense>
+  // Easiest way is to wrap the part of the component that uses it.
+  return (
+    <Suspense fallback={<div>Loading simulation parameters...</div>}>
+       <SimulationContent />
+    </Suspense>
   );
 } 

@@ -92,6 +92,25 @@ export default async function DashboardPage() {
     }
   }
 
+  // --- Helper to create query string from sim params --- 
+  const createSimulationQueryString = (sim: SavedSimulation): string => {
+      const params = {
+          initialInvestment: sim.initial_investment,
+          monthlyContribution: sim.monthly_contribution,
+          timeHorizonYears: sim.time_horizon_years,
+          riskLevel: sim.risk_level,
+          scenarioId: sim.scenario_id,
+          scenarioChoiceId: sim.scenario_choice_id,
+      };
+      // Filter out null/undefined values and convert numbers to strings
+      const filteredParams = Object.entries(params)
+          .filter(([_, value]) => value !== null && value !== undefined)
+          .map(([key, value]) => [key, String(value)]); // Convert value to string
+          
+      return new URLSearchParams(filteredParams).toString(); // No assertion needed now
+  }
+  // -----------------------------------------------------
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Welcome back, {user.email}!</h1>
@@ -128,22 +147,33 @@ export default async function DashboardPage() {
           <h2 className="text-2xl font-semibold mb-4">Recent Simulations</h2>
           {savedSimulations.length > 0 ? (
             <ul className="space-y-4">
-              {savedSimulations.map((sim) => (
-                <li key={sim.id} className="p-4 border rounded-lg shadow-sm bg-white dark:bg-gray-800">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <span className="block text-sm font-medium text-gray-500 dark:text-gray-400">
-                        {new Date(sim.created_at).toLocaleDateString()} - {new Date(sim.created_at).toLocaleTimeString()}
-                      </span>
-                      {sim.simulation_name && <p className="font-semibold text-lg mb-1">{sim.simulation_name}</p>}
+              {savedSimulations.map((sim) => {
+                const queryString = createSimulationQueryString(sim);
+                return (
+                  <li key={sim.id} className="p-4 border rounded-lg shadow-sm bg-white dark:bg-gray-800">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <span className="block text-sm font-medium text-gray-500 dark:text-gray-400">
+                          {new Date(sim.created_at).toLocaleDateString()} - {new Date(sim.created_at).toLocaleTimeString()}
+                        </span>
+                        {sim.simulation_name && <p className="font-semibold text-lg mb-1">{sim.simulation_name}</p>}
+                      </div>
+                      <DeleteSimulationButton simulationId={sim.id} userId={user.id} />
                     </div>
-                    <DeleteSimulationButton simulationId={sim.id} userId={user.id} />
-                  </div>
-                  <p className="text-sm">Params: £{sim.initial_investment} initial, £{sim.monthly_contribution}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
-                  {sim.scenario_id && <p className="text-xs italic text-gray-600 dark:text-gray-400">Scenario applied</p>}
-                  <p className="mt-2 text-lg font-bold text-green-600 dark:text-green-400">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
-                </li>
-              ))}
+                    <p className="text-sm">Params: £{sim.initial_investment} initial, £{sim.monthly_contribution}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
+                    {sim.scenario_id && <p className="text-xs italic text-gray-600 dark:text-gray-400">Scenario applied: {sim.scenario_id}</p>}
+                    <p className="mt-2 text-lg font-bold text-green-600 dark:text-green-400">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
+                    <div className="text-right mt-2">
+                      <Link 
+                        href={`/simulation?${queryString}`}
+                        className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                      >
+                        Load Parameters
+                      </Link>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="text-gray-500 dark:text-gray-400">You haven't saved any simulations yet.</p>

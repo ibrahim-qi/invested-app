@@ -112,11 +112,11 @@ export default async function DashboardPage() {
   // -----------------------------------------------------
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Welcome back, {user.email}!</h1>
+    <div className="p-6">
+      <h1 className="text-3xl font-bold mb-6">Welcome back, <span className="font-medium text-gray-700">{user.email}!</span></h1>
 
       {recommendedModule ? (
-        <div className="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded shadow mb-6" role="alert">
+        <div className="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded shadow mb-6" role="alert">
           <p className="font-bold">Your Next Step:</p>
           <p>We recommend continuing with the following module:</p>
           <Link href={`/learn/${recommendedModule.id}`} legacyBehavior>
@@ -143,21 +143,27 @@ export default async function DashboardPage() {
                 const moduleLessonIds = moduleToLessonIdsMap.get(module.id) || [];
                 const isModuleComplete = moduleLessonIds.length > 0 && moduleLessonIds.every(lessonId => completedLessonIds.has(lessonId));
                 return (
-                  <li key={module.id} className="p-3 border rounded-lg shadow-sm bg-white dark:bg-gray-800 flex justify-between items-center">
-                    <Link href={`/learn/${module.id}`} className="hover:underline flex-grow">
+                  <li 
+                    key={module.id} 
+                    className="p-3 border rounded-lg shadow-sm bg-white flex justify-between items-center hover:bg-gray-50 transition-colors duration-150 ease-in-out"
+                  >
+                    <Link href={`/learn/${module.id}`} className="hover:underline flex-grow font-medium text-gray-800">
                       {module.title}
                     </Link>
                     {isModuleComplete ? (
-                      <span className="ml-3 text-sm font-medium text-green-600 dark:text-green-400">✓ Completed</span>
+                      <span className="ml-3 text-sm font-semibold text-green-600 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        Completed
+                      </span>
                     ) : (
-                       <span className="ml-3 text-sm font-medium text-gray-500 dark:text-gray-400">In Progress</span>
+                       <span className="ml-3 text-sm font-medium text-yellow-600">In Progress</span>
                     )}
                   </li>
                 );
               })}
             </ul>
           ) : (
-             <p className="text-gray-500 dark:text-gray-400">No learning modules found.</p>
+             <p className="text-gray-500">No learning modules found.</p>
           )}
         </div>
 
@@ -168,23 +174,25 @@ export default async function DashboardPage() {
               {savedSimulations.map((sim) => {
                 const queryString = createSimulationQueryString(sim);
                 return (
-                  <li key={sim.id} className="p-4 border rounded-lg shadow-sm bg-white dark:bg-gray-800">
-                    <div className="flex justify-between items-start mb-2">
+                  <li key={sim.id} className="p-4 border rounded-lg shadow-sm bg-white flex flex-col space-y-2">
+                    <div className="flex justify-between items-start">
                       <div>
-                        <span className="block text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <span className="block text-sm font-medium text-gray-500">
                           {new Date(sim.created_at).toLocaleDateString()} - {new Date(sim.created_at).toLocaleTimeString()}
                         </span>
-                        {sim.simulation_name && <p className="font-semibold text-lg mb-1">{sim.simulation_name}</p>}
+                        {sim.simulation_name && <p className="font-semibold text-lg mt-1">{sim.simulation_name}</p>}
                       </div>
                       <DeleteSimulationButton simulationId={sim.id} userId={user.id} />
                     </div>
-                    <p className="text-sm">Params: £{sim.initial_investment} initial, £{sim.monthly_contribution}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
-                    {sim.scenario_id && <p className="text-xs italic text-gray-600 dark:text-gray-400">Scenario applied: {sim.scenario_id}</p>}
-                    <p className="mt-2 text-lg font-bold text-green-600 dark:text-green-400">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
-                    <div className="text-right mt-2">
+                    <div>
+                      <p className="text-sm text-gray-700">Params: £{sim.initial_investment.toLocaleString()} initial, £{sim.monthly_contribution.toLocaleString()}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
+                      {sim.scenario_id && <p className="text-xs italic text-gray-600 mt-1">Scenario applied: {sim.scenario_id}</p>}
+                      <p className="mt-2 text-lg font-bold text-green-600">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
+                    </div>
+                    <div className="text-right mt-2 border-t pt-2 border-gray-200">
                       <Link 
                         href={`/simulation?${queryString}`}
-                        className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150 ease-in-out"
                       >
                         Load Parameters
                       </Link>
@@ -194,7 +202,7 @@ export default async function DashboardPage() {
               })}
             </ul>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400">You haven't saved any simulations yet.</p>
+            <p className="text-gray-500">You haven't saved any simulations yet.</p>
           )}
           {/* Add link to view all saved simulations later */}
         </div>

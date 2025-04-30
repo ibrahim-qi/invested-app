@@ -35,28 +35,33 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-gray-800 text-white p-4">
+    <header className="bg-gray-900 text-gray-100 p-5 border-b border-gray-700 shadow-sm">
       <div className="container mx-auto flex justify-between items-center">
-        <Link href="/" className="text-xl font-bold">
+        <Link href="/" className="text-2xl font-semibold hover:text-white transition-colors">
           InvestEd
         </Link>
         <nav className="flex items-center space-x-6">
-          <Link href="/learn" className="hover:text-gray-300 text-sm">Learn</Link>
-          <Link href="/simulation" className="hover:text-gray-300 text-sm">Simulate</Link>
+          <Link href="/learn" className="text-gray-300 hover:text-white transition-colors text-base">Learn</Link>
+          <Link href="/simulation" className="text-gray-300 hover:text-white transition-colors text-base">Simulate</Link>
 
           {user ? (
             <div className="flex items-center space-x-4">
-              <Link href="/dashboard" className="hover:text-gray-300 text-sm">Dashboard</Link>
-              <span className="text-sm">{user.email}</span>
+              <Link href="/dashboard" className="text-gray-300 hover:text-white transition-colors text-base">Dashboard</Link>
+              <span className="text-sm text-gray-400">{user.email}</span>
               <button
                 onClick={handleLogout}
-                className="bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm"
+                className="bg-red-600 hover:bg-red-700 text-white py-1.5 px-4 rounded text-sm font-medium transition-colors shadow-sm"
               >
                 Logout
               </button>
             </div>
           ) : (
-            <Link href="/login" className="hover:text-gray-300 text-sm">Login</Link>
+            <Link 
+              href="/login" 
+              className="bg-indigo-600 hover:bg-indigo-700 text-white py-1.5 px-4 rounded text-sm font-medium transition-colors shadow-sm"
+            >
+              Login
+            </Link>
           )}
         </nav>
       </div>

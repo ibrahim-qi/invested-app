@@ -6,6 +6,7 @@ import QuizComponent from '@/components/QuizComponent';
 import { createServerClient } from '@/lib/supabase/server';
 import MarkCompleteButton from '@/components/MarkCompleteButton';
 import type { Database } from '@/lib/database.types';
+import { createClient } from '@supabase/supabase-js' // Import the base client
 
 // Define types based on DB schema
 type Module = Database['public']['Tables']['learning_modules']['Row'];
@@ -141,10 +142,26 @@ async function getModuleData(moduleId: string) {
 
 // Regenerate static paths (optional, based on DB data)
 export async function generateStaticParams() {
-    const supabase = createServerClient();
+    // Use a basic client instance with env variables for build-time data fetching
+    // Ensure these environment variables are available during the build process
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+        console.error("Supabase URL or Anon Key missing in environment variables for generateStaticParams.");
+        return [];
+    }
+
+    const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+    
     const { data, error } = await supabase.from('learning_modules').select('id');
-    if (error || !data) return [];
-    return data.map((module) => ({ moduleId: module.id }));
+    
+    if (error) {
+        console.error("Error fetching modules for generateStaticParams:", error.message);
+        return [];
+    }
+    
+    return data ? data.map((module) => ({ moduleId: module.id })) : [];
 }
 
 // --- RenderContentBlock Component --- 

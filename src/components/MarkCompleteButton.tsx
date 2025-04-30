@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabaseClient'; // Use client-side client
+import { createClient } from '@/lib/supabase/client'; // Use client-side client
 import { useRouter } from 'next/navigation';
 
 interface MarkCompleteButtonProps {

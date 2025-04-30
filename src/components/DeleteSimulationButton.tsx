@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react';
-import { createClient } from '@/lib/supabaseClient';
+import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { TrashIcon } from '@heroicons/react/24/outline'; // Outline icon for delete
 

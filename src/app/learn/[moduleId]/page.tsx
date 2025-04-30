@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Tooltip from '@/components/Tooltip';
 import React from 'react';
 import QuizComponent from '@/components/QuizComponent';
-import { createSupabaseServerClient } from '@/lib/supabaseClient';
+import { createServerClient } from '@/lib/supabase/server';
 import MarkCompleteButton from '@/components/MarkCompleteButton';
 import type { Database } from '@/lib/database.types';
 
@@ -45,7 +45,7 @@ function isValidAppContentBlock(obj: any): obj is AppContentBlock {
 
 // Fetch data function
 async function getModuleData(moduleId: string) {
-  const supabase = createSupabaseServerClient();
+  const supabase = createServerClient();
   
   // Fetch module
   const { data: moduleData, error: moduleError } = await supabase
@@ -141,7 +141,7 @@ async function getModuleData(moduleId: string) {
 
 // Regenerate static paths (optional, based on DB data)
 export async function generateStaticParams() {
-    const supabase = createSupabaseServerClient();
+    const supabase = createServerClient();
     const { data, error } = await supabase.from('learning_modules').select('id');
     if (error || !data) return [];
     return data.map((module) => ({ moduleId: module.id }));

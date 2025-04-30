@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { createSupabaseServerClient } from '@/lib/supabaseClient';
+import { createServerClient } from '@/lib/supabase/server';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import type { Database } from '@/lib/database.types'; // Import full DB types
 
@@ -10,13 +10,14 @@ type Lesson = Database['public']['Tables']['lessons']['Row']; // Need this type 
 // Helper function to fetch lessons for a module (to check completion)
 // We only need the IDs here
 async function getLessonsForModule(
-  supabase: ReturnType<typeof createSupabaseServerClient>, 
+  supabase: ReturnType<typeof createServerClient>,
   moduleId: string
 ): Promise<{ id: string }[]> { // Return only IDs
   const { data, error } = await supabase
     .from('lessons')
-    .select('id') // Select only ID
+    .select('id')
     .eq('module_id', moduleId);
+
   if (error) {
     console.error(`Error fetching lessons for module ${moduleId}:`, error.message);
     return [];
@@ -24,8 +25,24 @@ async function getLessonsForModule(
   return data || [];
 }
 
+// Fetch user's completed lessons
+async function getUserCompletedLessons(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string
+): Promise<Set<string>> {
+  const { data: progressData, error: progressError } = await supabase
+    .from('user_lesson_progress')
+    .select('lesson_id')
+    .eq('user_id', userId);
+  if (progressError) {
+    console.error('Error fetching user progress:', progressError.message);
+    return new Set<string>();
+  }
+  return new Set(progressData.map((p: { lesson_id: string }) => p.lesson_id));
+}
+
 export default async function LearnPage() {
-  const supabase = createSupabaseServerClient();
+  const supabase = createServerClient();
 
   // Fetch Modules from DB
   const { data: modulesData, error: modulesError } = await supabase
@@ -62,6 +79,14 @@ export default async function LearnPage() {
   for (const module of modules) {
      const lessons = await getLessonsForModule(supabase, module.id);
      moduleLessonsMap.set(module.id, lessons.map(l => l.id));
+  }
+
+  // Calculate completion status for each module
+  const moduleCompletionStatus = new Map<string, boolean>();
+  for (const module of modules) {
+      const lessons = await getLessonsForModule(supabase, module.id);
+      const isComplete = lessons.length > 0 && lessons.every(lesson => completedLessonIds.has(lesson.id));
+      moduleCompletionStatus.set(module.id, isComplete);
   }
 
   return (

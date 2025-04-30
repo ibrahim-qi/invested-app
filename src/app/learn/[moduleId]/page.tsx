@@ -27,6 +27,8 @@ function isValidAppContentBlock(obj: any): obj is AppContentBlock {
       return typeof obj.src === 'string' && typeof obj.alt === 'string';
     case 'video':
        return typeof obj.src === 'string';
+    case 'diagram':
+       return typeof obj.src === 'string' && typeof obj.alt === 'string';
     case 'quiz':
        return Array.isArray(obj.questions) && obj.questions.every((q: any) => 
          typeof q.id === 'string' && 
@@ -202,6 +204,19 @@ const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, gloss
           <video controls src={block.src} className="w-full rounded shadow-md mx-auto max-w-2xl">
             Your browser does not support the video tag.
           </video>
+          {block.caption && <figcaption className="text-center text-sm text-gray-500 mt-2">{block.caption}</figcaption>}
+        </figure>
+      );
+    case 'diagram':
+      return (
+        <figure className="my-4 p-4 border rounded bg-gray-50 dark:bg-gray-800">
+          <Image 
+            src={block.src} 
+            alt={block.alt} 
+            width={700}
+            height={500} 
+            className="rounded shadow-md mx-auto" 
+          />
           {block.caption && <figcaption className="text-center text-sm text-gray-500 mt-2">{block.caption}</figcaption>}
         </figure>
       );

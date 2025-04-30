@@ -10,7 +10,7 @@ export type ContentBlock =
   | { type: 'heading'; level: 1 | 2 | 3 | 4 | 5 | 6; content: string }
   | { type: 'image'; src: string; alt: string; caption?: string }
   | { type: 'video'; src: string; caption?: string }
-  | { type: 'diagram'; data: any; caption?: string } // Placeholder for diagram data
+  | { type: 'diagram'; src: string; alt: string; caption?: string }
   | { type: 'quiz'; questions: QuizQuestion[] };
 
 export interface Lesson {

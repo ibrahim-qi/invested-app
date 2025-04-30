@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import type { Database } from '@/lib/database.types'; // Import full DB types
 import DeleteSimulationButton from '@/components/DeleteSimulationButton'; // Import delete button
+import { LightBulbIcon } from '@heroicons/react/24/outline'; // Import an icon
 
 // Define a type for the saved simulation data we fetch
 type SavedSimulation = Database['public']['Tables']['saved_simulations']['Row'];
@@ -112,89 +113,95 @@ export default async function DashboardPage() {
   // -----------------------------------------------------
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-6">Welcome back, <span className="font-medium text-gray-700">{user.email}!</span></h1>
+    <div className="p-8">
+      <h1 className="text-3xl font-bold mb-8">Welcome back, <span className="font-medium text-gray-700">{user.email}!</span></h1>
 
       {recommendedModule ? (
-        <div className="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded shadow mb-6" role="alert">
-          <p className="font-bold">Your Next Step:</p>
-          <p>We recommend continuing with the following module:</p>
-          <Link href={`/learn/${recommendedModule.id}`} legacyBehavior>
-            <a className="block mt-4 p-4 bg-white rounded shadow hover:shadow-md">
-              <h3 className="text-xl font-bold text-gray-900">{recommendedModule.title}</h3>
-              <p className="text-gray-600">{recommendedModule.description}</p>
-            </a>
-          </Link>
+        <div className="bg-white border border-blue-200 text-blue-900 p-5 rounded-lg shadow-sm mb-8 flex items-start space-x-4" role="alert">
+          <LightBulbIcon className="h-6 w-6 text-blue-500 flex-shrink-0 mt-1" />
+          <div>
+            <p className="font-semibold text-lg">Your Next Step:</p>
+            <p className="text-sm mt-1">We recommend continuing with the following module:</p>
+            <Link href={`/learn/${recommendedModule.id}`} legacyBehavior>
+              <a className="block mt-3 p-3 bg-gray-50 border border-gray-200 rounded hover:shadow-md hover:bg-white transition duration-150 ease-in-out">
+                <h3 className="text-lg font-semibold text-gray-900">{recommendedModule.title}</h3>
+                <p className="text-sm text-gray-600 mt-1">{recommendedModule.description}</p>
+              </a>
+            </Link>
+          </div>
         </div>
       ) : (
-        <div className="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 rounded shadow mb-6" role="alert">
-          <p className="font-bold">Congratulations!</p>
-          <p>You have completed all available learning modules.</p>
-          {/* Link to simulation or other features later */}
+        <div className="bg-green-50 border border-green-200 text-green-900 p-5 rounded-lg shadow-sm mb-8 flex items-start space-x-4" role="alert">
+           <svg className="h-6 w-6 text-green-500 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+           <div>
+              <p className="font-semibold text-lg">Congratulations!</p>
+              <p className="text-sm mt-1">You have completed all available learning modules.</p>
+           </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Module Progress</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-5 text-gray-800">Module Progress</h2>
           {modules.length > 0 ? (
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {modules.map((module) => {
                 const moduleLessonIds = moduleToLessonIdsMap.get(module.id) || [];
                 const isModuleComplete = moduleLessonIds.length > 0 && moduleLessonIds.every(lessonId => completedLessonIds.has(lessonId));
                 return (
                   <li 
                     key={module.id} 
-                    className="p-3 border rounded-lg shadow-sm bg-white flex justify-between items-center hover:bg-gray-50 transition-colors duration-150 ease-in-out"
+                    className="border-b border-gray-200 pb-4 flex justify-between items-center"
                   >
-                    <Link href={`/learn/${module.id}`} className="hover:underline flex-grow font-medium text-gray-800">
+                    <Link href={`/learn/${module.id}`} className="hover:text-indigo-600 flex-grow font-medium text-gray-700 text-base mr-4">
                       {module.title}
                     </Link>
                     {isModuleComplete ? (
-                      <span className="ml-3 text-sm font-semibold text-green-600 flex items-center">
-                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                         Completed
                       </span>
                     ) : (
-                       <span className="ml-3 text-sm font-medium text-yellow-600">In Progress</span>
+                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                         In Progress
+                       </span>
                     )}
                   </li>
                 );
               })}
             </ul>
           ) : (
-             <p className="text-gray-500">No learning modules found.</p>
+             <p className="text-gray-500 italic">No learning modules found.</p>
           )}
         </div>
 
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Recent Simulations</h2>
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+          <h2 className="text-xl font-semibold mb-5 text-gray-800">Recent Simulations</h2>
           {savedSimulations.length > 0 ? (
-            <ul className="space-y-4">
+            <ul className="space-y-5">
               {savedSimulations.map((sim) => {
                 const queryString = createSimulationQueryString(sim);
                 return (
-                  <li key={sim.id} className="p-4 border rounded-lg shadow-sm bg-white flex flex-col space-y-2">
+                  <li key={sim.id} className="p-4 border rounded-md bg-gray-50 flex flex-col space-y-3 hover:shadow-lg transition-shadow duration-150 ease-in-out">
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="block text-sm font-medium text-gray-500">
+                        <span className="block text-xs font-medium text-gray-500">
                           {new Date(sim.created_at).toLocaleDateString()} - {new Date(sim.created_at).toLocaleTimeString()}
                         </span>
-                        {sim.simulation_name && <p className="font-semibold text-lg mt-1">{sim.simulation_name}</p>}
+                        {sim.simulation_name && <p className="font-semibold text-base mt-1 text-gray-800">{sim.simulation_name}</p>}
                       </div>
                       <DeleteSimulationButton simulationId={sim.id} userId={user.id} />
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-700">Params: £{sim.initial_investment.toLocaleString()} initial, £{sim.monthly_contribution.toLocaleString()}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
-                      {sim.scenario_id && <p className="text-xs italic text-gray-600 mt-1">Scenario applied: {sim.scenario_id}</p>}
-                      <p className="mt-2 text-lg font-bold text-green-600">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-600">Params: £{sim.initial_investment.toLocaleString()} initial, £{sim.monthly_contribution.toLocaleString()}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
+                      {sim.scenario_id && <p className="text-xs italic text-gray-500">Scenario applied: {sim.scenario_id}</p>}
+                      <p className="pt-1 text-base font-semibold text-green-700">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
                     </div>
-                    <div className="text-right mt-2 border-t pt-2 border-gray-200">
+                    <div className="text-right pt-2 border-t border-gray-200">
                       <Link 
                         href={`/simulation?${queryString}`}
-                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-150 ease-in-out"
+                        className="text-sm font-medium text-indigo-600 hover:text-indigo-800 transition-colors duration-150 ease-in-out"
                       >
-                        Load Parameters
+                        Load Parameters &rarr;
                       </Link>
                     </div>
                   </li>
@@ -202,9 +209,8 @@ export default async function DashboardPage() {
               })}
             </ul>
           ) : (
-            <p className="text-gray-500">You haven't saved any simulations yet.</p>
+            <p className="text-gray-500 italic">You haven't saved any simulations yet.</p>
           )}
-          {/* Add link to view all saved simulations later */}
         </div>
       </div>
     </div>

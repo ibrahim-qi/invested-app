@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Image from 'next/image';
 import Tooltip from '@/components/Tooltip';
 import React from 'react';
@@ -230,6 +230,16 @@ const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, gloss
 
 // --- Main Page Component --- 
 export default async function ModulePage({ params }: { params: { moduleId: string } }) {
+  // --- Add Authentication Check ---
+  // Check auth BEFORE fetching data specific to the module
+  const supabase = createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    redirect('/login?message=Please login to view this learning module');
+  }
+  // -----------------------------
+
+  // Now fetch module data (user is authenticated)
   const { module, lessons, glossary, completedLessonIds, userId } = await getModuleData(params.moduleId);
 
   if (!module) {

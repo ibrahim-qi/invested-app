@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { createServerClient } from '@/lib/supabase/server';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import type { Database } from '@/lib/database.types'; // Import full DB types
+import { redirect } from 'next/navigation'; // Import redirect
 
 type Module = Database['public']['Tables']['learning_modules']['Row'];
 
@@ -43,6 +44,13 @@ async function getUserCompletedLessons(
 
 export default async function LearnPage() {
   const supabase = createServerClient();
+
+  // --- Add Authentication Check ---
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    redirect('/login?message=Please login to view learning modules');
+  }
+  // -----------------------------
 
   // Fetch Modules from DB
   const { data: modulesData, error: modulesError } = await supabase

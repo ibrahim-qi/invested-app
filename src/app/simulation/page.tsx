@@ -1,23 +1,14 @@
-'use client'
-
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import { calculatePortfolioGrowth } from '@/lib/simulationUtils'; // Import the new calculation function
-// Import Recharts components
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from 'recharts';
-import type { Scenario as AppScenario, ScenarioChoice as AppScenarioChoice } from '@/types/simulation.types'; // Import scenario types
-import { createClient } from '@/lib/supabase/client'; // Import client-side client
-import type { User } from '@supabase/supabase-js'; // Import User type
-import type { Database } from '@/lib/database.types'; // Import full DB types
-import { useSearchParams } from 'next/navigation'; // Import useSearchParams
+import React, { Suspense } from 'react';
+import { createServerClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
+import { calculatePortfolioGrowth } from '@/lib/simulationUtils';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import type { Scenario as AppScenario, ScenarioChoice as AppScenarioChoice } from '@/types/simulation.types';
+import { createClient } from '@/lib/supabase/client';
+import type { User } from '@supabase/supabase-js';
+import type { Database } from '@/lib/database.types';
+import { useSearchParams } from 'next/navigation';
+import { useState, useEffect, useMemo } from 'react';
 
 // DB Types
 type DbScenario = Database['public']['Tables']['scenarios']['Row'];
@@ -44,8 +35,8 @@ const formatCurrency = (value: number) => `£${value.toLocaleString()}`;
 // Helper to format X-axis ticks from months to years
 const formatYear = (month: number) => `Year ${Math.floor(month / 12)}`;
 
-// --- Component to Read Query Params --- 
-// Needs to be separate because useSearchParams requires Suspense boundary
+// --- SimulationContent Client Component --- 
+'use client'
 function SimulationContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();
@@ -273,6 +264,7 @@ function SimulationContent() {
   };
   // -----------------------------
 
+  // JSX for the client component
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Investment Portfolio Simulation</h1>
@@ -448,10 +440,18 @@ function SimulationContent() {
   );
 }
 
-// --- Main Exported Component with Suspense Boundary --- 
-export default function SimulationPage() {
-  // useSearchParams needs to be wrapped in <Suspense>
-  // Easiest way is to wrap the part of the component that uses it.
+
+// --- Main Exported Component (Now a Server Component) --- 
+export default async function SimulationPage() {
+  // --- Add Authentication Check ---
+  const supabase = createServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    redirect('/login?message=Please login to run simulations');
+  }
+  // -----------------------------
+
+  // Render the client component within Suspense
   return (
     <Suspense fallback={<div>Loading simulation parameters...</div>}>
        <SimulationContent />

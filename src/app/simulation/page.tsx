@@ -1,3 +1,5 @@
+'use client'
+
 import React, { Suspense } from 'react';
 import { createServerClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
@@ -36,7 +38,6 @@ const formatCurrency = (value: number) => `£${value.toLocaleString()}`;
 const formatYear = (month: number) => `Year ${Math.floor(month / 12)}`;
 
 // --- SimulationContent Client Component --- 
-'use client'
 function SimulationContent() {
   const supabase = createClient();
   const searchParams = useSearchParams();

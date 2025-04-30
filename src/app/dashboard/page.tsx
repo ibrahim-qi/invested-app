@@ -136,11 +136,29 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
         <div>
-          <h2 className="text-2xl font-semibold mb-4">Quick Links</h2>
-          <div className="flex flex-col space-y-2">
-            <Link href="/learn" className="text-blue-600 hover:underline">Browse All Modules</Link>
-            <Link href="/simulation" className="text-blue-600 hover:underline">Run New Simulation</Link>
-          </div>
+          <h2 className="text-2xl font-semibold mb-4">Module Progress</h2>
+          {modules.length > 0 ? (
+            <ul className="space-y-3">
+              {modules.map((module) => {
+                const moduleLessonIds = moduleToLessonIdsMap.get(module.id) || [];
+                const isModuleComplete = moduleLessonIds.length > 0 && moduleLessonIds.every(lessonId => completedLessonIds.has(lessonId));
+                return (
+                  <li key={module.id} className="p-3 border rounded-lg shadow-sm bg-white dark:bg-gray-800 flex justify-between items-center">
+                    <Link href={`/learn/${module.id}`} className="hover:underline flex-grow">
+                      {module.title}
+                    </Link>
+                    {isModuleComplete ? (
+                      <span className="ml-3 text-sm font-medium text-green-600 dark:text-green-400">✓ Completed</span>
+                    ) : (
+                       <span className="ml-3 text-sm font-medium text-gray-500 dark:text-gray-400">In Progress</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+             <p className="text-gray-500 dark:text-gray-400">No learning modules found.</p>
+          )}
         </div>
 
         <div>

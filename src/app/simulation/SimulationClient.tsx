@@ -493,6 +493,15 @@ export default function SimulationContent() {
               )}
               {/* ----------------------------------- */}
 
+              {/* --- Contextual Suggestion --- */}
+              {params.riskLevel === 'aggressive' && (
+                <p className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-sm text-yellow-800 dark:text-yellow-200">
+                  Using an aggressive strategy? Consider reviewing the 'Risk Management' learning module for important concepts. 
+                  {/* Optional: <Link href="/learn/risk-module-id" className="font-semibold underline hover:text-yellow-600"> Learn More</Link> */}
+                </p>
+              )}
+              {/* --------------------------- */}
+
               {/* Note about rates used */}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees)</p>
               

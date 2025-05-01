@@ -1,7 +1,7 @@
 'use client'
 
 import React, { Suspense } from 'react';
-import { calculatePortfolioGrowth } from '@/lib/simulationUtils';
+import { calculatePortfolioGrowth, riskLevelAllocations } from '@/lib/simulationUtils';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { Scenario as AppScenario, ScenarioChoice as AppScenarioChoice } from '@/types/simulation.types';
 import { createClient } from '@/lib/supabase/client';
@@ -28,6 +28,9 @@ type SimulationResult = {
   totalGrowth: number;
   monthlyData?: { month: number; balance: number }[]; // Make monthlyData optional here
 };
+
+// Helper to format percentage
+const formatPercent = (value: number) => `${(value * 100).toFixed(0)}%`;
 
 // Helper to format Y-axis ticks as currency
 const formatCurrency = (value: number) => `£${value.toLocaleString()}`;
@@ -263,6 +266,10 @@ export default function SimulationContent() {
   };
   // -----------------------------
 
+  // --- Get current allocation based on selected risk level ---
+  const currentAllocation = riskLevelAllocations[params.riskLevel];
+  // ----------------------------------------------------------
+
   // JSX for the client component
   return (
     <div>
@@ -282,6 +289,7 @@ export default function SimulationContent() {
                 value={params.initialInvestment}
                 onChange={handleInputChange}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                step="100"
               />
             </div>
             <div>
@@ -321,6 +329,11 @@ export default function SimulationContent() {
                 <option value="moderate">Moderate</option>
                 <option value="aggressive">Aggressive</option>
               </select>
+              {/* --- Display Allocation --- */}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Allocation: {formatPercent(currentAllocation.stocks)} Stocks / {formatPercent(currentAllocation.bonds)} Bonds / {formatPercent(currentAllocation.cash)} Cash
+              </p>
+              {/* ------------------------- */}
             </div>
 
             {/* Scenario Selection Section (Add below parameters) */}

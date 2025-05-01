@@ -19,7 +19,7 @@ const expectedAnnualReturns = {
   cash: 0.015,   // 1.5%
 };
 
-const riskLevelAllocations = {
+export const riskLevelAllocations = {
   conservative: { stocks: 0.30, bonds: 0.50, cash: 0.20 }, // 30/50/20
   moderate:     { stocks: 0.60, bonds: 0.30, cash: 0.10 }, // 60/30/10
   aggressive:   { stocks: 0.80, bonds: 0.15, cash: 0.05 }, // 80/15/5

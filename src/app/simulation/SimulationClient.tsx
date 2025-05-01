@@ -32,11 +32,17 @@ type SimulationAdvancedParams = SimulationParams & {
 // --------------------------------
 
 type SimulationResult = {
-  finalBalance: number;
+  finalBalance: number; // Represents P50 now
   totalContributions: number;
-  totalGrowth: number;
-  finalBalanceReal?: number; // Optional: For inflation-adjusted balance
-  monthlyData?: { month: number; balance: number }[]; 
+  totalGrowth: number; // Growth based on P50
+  finalBalanceReal?: number; // P50 real balance
+  
+  finalBalanceP10: number;
+  finalBalanceP50: number; 
+  finalBalanceP90: number;
+
+  monthlyDataP50: { month: number; balance: number }[]; 
+  
   weightedAnnualRate?: number;
   totalFeesPaid?: number;
 };
@@ -273,14 +279,15 @@ export default function SimulationContent() {
         // -------------------------
         scenario_id: selectedScenario?.id || null,
         scenario_choice_id: selectedChoice?.id || null,
-        final_balance: result.finalBalance,
-        // -- Optionally save real balance if calculated --
+        final_balance: result.finalBalanceP50, // Save median balance 
         final_balance_real: result.finalBalanceReal, 
-        // ------------------------------------------------
         total_contributions: result.totalContributions,
-        total_growth: result.totalGrowth,
+        total_growth: result.totalGrowth, // Growth based on median
         weighted_annual_rate: result.weightedAnnualRate,
-        total_fees_paid: result.totalFeesPaid,
+        total_fees_paid: result.totalFeesPaid, // Median fees
+        // Add columns for p10/p90 if choosing Option 2 above
+        // final_balance_p10: result.finalBalanceP10,
+        // final_balance_p90: result.finalBalanceP90,
       });
 
      if (error) {
@@ -305,13 +312,13 @@ export default function SimulationContent() {
 
   // JSX for the client component
   return (
-    <div className="container mx-auto p-8">
+    <div>
       <h1 className="text-3xl font-bold mb-6">Investment Portfolio Simulation</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {/* Input Parameters Section */}
         <div className="md:col-span-1 bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Parameters</h2>
+          <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Parameters</h2>
           <div className="space-y-4">
             <div>
               <label htmlFor="initialInvestment" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Initial Investment (£)</label>
@@ -433,7 +440,7 @@ export default function SimulationContent() {
                          onChange={() => handleChoiceSelect(choice.id)}
                          className="mr-2"
                        />
-                       <span className="text-sm">{choice.text}</span>
+                       <span className="text-sm dark:text-gray-200">{choice.text}</span>
                     </label>
                   );
                 })}
@@ -455,7 +462,7 @@ export default function SimulationContent() {
         {/* Results Display Section */}
         <div className="md:col-span-2 bg-white dark:bg-gray-900 p-6 rounded-lg shadow">
           <div className="flex justify-between items-start mb-4">
-             <h2 className="text-xl font-semibold">Results</h2>
+             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Results</h2>
              {/* --- Save Button --- */} 
              {user && result && !isLoading && (
                 <button 
@@ -473,44 +480,44 @@ export default function SimulationContent() {
           {isLoading && <p>Calculating results...</p>}
           {result && !isLoading && (
             <div className="space-y-3">
-              {/* Nominal Balance */}
-              <p className="text-lg">Projected Balance (Nominal): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalance.toLocaleString()}</span></p>
-              {/* Real Balance */}
+              {/* --- Update Results Display for Percentiles --- */}
+              <p className="text-lg text-gray-700 dark:text-gray-300">Projected Balance Range (Nominal):</p>
+              <div className="pl-4 text-md">
+                 <p className="dark:text-gray-300">Median (P50): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalanceP50.toLocaleString()}</span></p>
+                 <p className="text-sm text-gray-600 dark:text-gray-300">Range (P10 - P90): £{result.finalBalanceP10.toLocaleString()} - £{result.finalBalanceP90.toLocaleString()}</p>
+              </div>
+
               {result.finalBalanceReal !== undefined && (
-                <p className="text-md">Projected Balance (Real, adjusted for inflation): <span className="font-semibold">£{result.finalBalanceReal.toLocaleString()}</span></p>
+                <p className="text-md text-gray-700 dark:text-gray-300">Median Balance (Real, adjusted for inflation): <span className="font-semibold">£{result.finalBalanceReal.toLocaleString()}</span></p>
               )}
-              {/* Contributions */}
-              <p className="text-md">Total Contributions: <span className="font-semibold">£{result.totalContributions.toLocaleString()}</span></p>
-              {/* Nominal Growth */}
-              <p className="text-md">Estimated Growth (Nominal): <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
+              <p className="text-md text-gray-700 dark:text-gray-300">Total Contributions: <span className="font-semibold">£{result.totalContributions.toLocaleString()}</span></p>
+              <p className="text-md text-gray-700 dark:text-gray-300">Median Estimated Growth (Nominal): <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
               
-              {/* --- Add Display for Rate and Fees --- */}
+              {/* Assumed Rate and Fees (Use optional chaining just in case) */}
               {result.weightedAnnualRate !== undefined && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">Assumed Avg. Annual Return (before fees): <span className="font-semibold">{formatPercent(result.weightedAnnualRate)}</span></p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Assumed Avg. Annual Return (portfolio mean): <span className="font-semibold">{formatPercent(result.weightedAnnualRate)}</span></p>
               )}
               {result.totalFeesPaid !== undefined && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">Estimated Total Fees Paid: <span className="font-semibold">£{result.totalFeesPaid.toLocaleString()}</span></p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Estimated Median Total Fees Paid: <span className="font-semibold">£{result.totalFeesPaid.toLocaleString()}</span></p>
               )}
-              {/* ----------------------------------- */}
 
-              {/* --- Contextual Suggestion --- */}
+              {/* Contextual Suggestion */}
               {params.riskLevel === 'aggressive' && (
-                <p className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-sm text-yellow-800 dark:text-yellow-200">
-                  Using an aggressive strategy? Consider reviewing the 'Risk Management' learning module for important concepts. 
+                 <p className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-sm text-yellow-800 dark:text-yellow-200">
+                  Using an aggn devressive strategy? Consider reviewing the 'Risk Management' learning module for important concepts. 
                   {/* Optional: <Link href="/learn/risk-module-id" className="font-semibold underline hover:text-yellow-600"> Learn More</Link> */}
                 </p>
               )}
-              {/* --------------------------- */}
 
-              {/* Note about rates used */}
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees)</p>
+              <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees. Projections show potential range.)</p>
+              {/* ------------------------------------------------- */}
               
-              {/* Recharts Line Chart - Add check for monthlyData */}
-              {result.monthlyData && result.monthlyData.length > 0 ? (
+              {/* --- Update Chart Data Source --- */}
+              {result.monthlyDataP50 && result.monthlyDataP50.length > 0 ? (
                 <div className="mt-6 h-80">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={result.monthlyData} // Safe to use now
+                      data={result.monthlyDataP50} // Use median path data
                       margin={{
                         top: 5,
                         right: 30,
@@ -522,18 +529,21 @@ export default function SimulationContent() {
                       <XAxis 
                         dataKey="month" 
                         tickFormatter={formatYear} 
-                        interval={Math.max(1, Math.floor(result.monthlyData.length / 10)) * 12} // Safe to use now
+                        interval={Math.max(1, Math.floor(result.monthlyDataP50.length / 10)) * 12} 
                       />
                       <YAxis tickFormatter={formatCurrency} width={80} />
                       <Tooltip formatter={(value: number) => formatCurrency(value)} />
                       <Legend />
-                      <Line type="monotone" dataKey="balance" name="Portfolio Balance" stroke="#16a34a" activeDot={{ r: 8 }} />
+                      {/* Display only the median line for simplicity now */}
+                      <Line type="monotone" dataKey="balance" name="Median Portfolio Balance" stroke="#16a34a" activeDot={{ r: 8 }} dot={false} />
+                      {/* TODO: Add Area chart or P10/P90 lines later if desired */}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
                  <p className="text-gray-500 mt-6">Chart data is unavailable.</p>
               )}
+              {/* ------------------------------ */}
             </div>
           )}
           {!result && !isLoading && (

@@ -37,6 +37,8 @@ type SimulationResult = {
   totalGrowth: number;
   finalBalanceReal?: number; // Optional: For inflation-adjusted balance
   monthlyData?: { month: number; balance: number }[]; 
+  weightedAnnualRate?: number;
+  totalFeesPaid?: number;
 };
 
 // Helper to format percentage
@@ -277,6 +279,8 @@ export default function SimulationContent() {
         // ------------------------------------------------
         total_contributions: result.totalContributions,
         total_growth: result.totalGrowth,
+        weighted_annual_rate: result.weightedAnnualRate,
+        total_fees_paid: result.totalFeesPaid,
       });
 
      if (error) {
@@ -469,18 +473,38 @@ export default function SimulationContent() {
           {isLoading && <p>Calculating results...</p>}
           {result && !isLoading && (
             <div className="space-y-3">
-              {/* --- Update Results Display --- */}
+              {/* Nominal Balance */}
               <p className="text-lg">Projected Balance (Nominal): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalance.toLocaleString()}</span></p>
-              {/* Add display for real balance */}
+              {/* Real Balance */}
               {result.finalBalanceReal !== undefined && (
                 <p className="text-md">Projected Balance (Real, adjusted for inflation): <span className="font-semibold">£{result.finalBalanceReal.toLocaleString()}</span></p>
               )}
+              {/* Contributions */}
               <p className="text-md">Total Contributions: <span className="font-semibold">£{result.totalContributions.toLocaleString()}</span></p>
+              {/* Nominal Growth */}
               <p className="text-md">Estimated Growth (Nominal): <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
-              {/* Add note about rates used */}
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees)</p>
-               {/* ----------------------------- */}
+              
+              {/* --- Add Display for Rate and Fees --- */}
+              {result.weightedAnnualRate !== undefined && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">Assumed Avg. Annual Return (before fees): <span className="font-semibold">{formatPercent(result.weightedAnnualRate)}</span></p>
+              )}
+              {result.totalFeesPaid !== undefined && (
+                <p className="text-sm text-gray-600 dark:text-gray-400">Estimated Total Fees Paid: <span className="font-semibold">£{result.totalFeesPaid.toLocaleString()}</span></p>
+              )}
+              {/* ----------------------------------- */}
 
+              {/* --- Contextual Suggestion --- */}
+              {params.riskLevel === 'aggressive' && (
+                <p className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-sm text-yellow-800 dark:text-yellow-200">
+                  Using an aggressive strategy? Consider reviewing the 'Risk Management' learning module for important concepts. 
+                  {/* Optional: <Link href="/learn/risk-module-id" className="font-semibold underline hover:text-yellow-600"> Learn More</Link> */}
+                </p>
+              )}
+              {/* --------------------------- */}
+
+              {/* Note about rates used */}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees)</p>
+              
               {/* Recharts Line Chart - Add check for monthlyData */}
               {result.monthlyData && result.monthlyData.length > 0 ? (
                 <div className="mt-6 h-80">

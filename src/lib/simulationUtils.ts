@@ -13,6 +13,8 @@ interface PortfolioGrowthResult {
   totalGrowth: number;
   finalBalanceReal?: number; // Optional real balance
   monthlyData: { month: number; balance: number }[]; // For charting
+  weightedAnnualRate: number;
+  totalFeesPaid: number;
 }
 
 // --- Define Asset Allocation and Returns ---
@@ -68,9 +70,17 @@ export const calculatePortfolioGrowth = (
   const totalMonths = timeHorizonYears * 12;
 
   let balance = initialInvestment;
+  let totalFeesPaid = 0; // Initialize fee accumulator
   const monthlyData: { month: number; balance: number }[] = [{ month: 0, balance }];
 
   for (let month = 1; month <= totalMonths; month++) {
+    // --- Calculate and deduct fee BEFORE adding contribution/growth for the month ---
+    // Simple approach: Apply annual fee monthly (feeRateDecimal / 12) on the balance *before* contribution/growth
+    const monthlyFee = balance * (feeRateDecimal / 12);
+    balance -= monthlyFee;
+    totalFeesPaid += monthlyFee;
+    // -----------------------------------------------------------------------------
+    
     balance += monthlyContribution;
     // Apply growth rate AFTER fees are accounted for
     balance *= (1 + monthlyRateAfterFees); 
@@ -92,5 +102,7 @@ export const calculatePortfolioGrowth = (
     totalContributions: Math.round(totalContributions * 100) / 100,
     totalGrowth: Math.round(totalGrowth * 100) / 100,
     monthlyData,
+    weightedAnnualRate: weightedAnnualRate,
+    totalFeesPaid: Math.round(totalFeesPaid * 100) / 100,
   };
 }; 

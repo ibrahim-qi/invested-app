@@ -20,13 +20,23 @@ type SimulationParams = {
   monthlyContribution: number;
   timeHorizonYears: number;
   riskLevel: 'conservative' | 'moderate' | 'aggressive';
+  annualInflationRate: number;
+  annualFeeRate: number;
 };
+
+// -- Add state for new parameters --
+type SimulationAdvancedParams = SimulationParams & {
+  annualInflationRate: number;
+  annualFeeRate: number;
+};
+// --------------------------------
 
 type SimulationResult = {
   finalBalance: number;
   totalContributions: number;
   totalGrowth: number;
-  monthlyData?: { month: number; balance: number }[]; // Make monthlyData optional here
+  finalBalanceReal?: number; // Optional: For inflation-adjusted balance
+  monthlyData?: { month: number; balance: number }[]; 
 };
 
 // Helper to format percentage
@@ -44,12 +54,15 @@ export default function SimulationContent() {
   const searchParams = useSearchParams();
 
   // Function to get initial state from search params or defaults
-  const getInitialParams = (): SimulationParams => {
+  const getInitialParams = (): SimulationParams => { // Use updated type
     return {
       initialInvestment: parseFloat(searchParams.get('initialInvestment') || '1000'),
       monthlyContribution: parseFloat(searchParams.get('monthlyContribution') || '100'),
       timeHorizonYears: parseInt(searchParams.get('timeHorizonYears') || '10', 10),
       riskLevel: (searchParams.get('riskLevel') as SimulationParams['riskLevel']) || 'moderate',
+      // Add defaults for new fields
+      annualInflationRate: parseFloat(searchParams.get('annualInflationRate') || '2.5'), // Default 2.5%
+      annualFeeRate: parseFloat(searchParams.get('annualFeeRate') || '0.5'),          // Default 0.5%
     };
   };
   
@@ -62,7 +75,7 @@ export default function SimulationContent() {
   };
 
   // Initialize state with values from URL params or defaults
-  const [params, setParams] = useState<SimulationParams>(getInitialParams());
+  const [params, setParams] = useState<SimulationParams>(getInitialParams()); // Use updated type
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [scenarios, setScenarios] = useState<DbScenario[]>([]);
@@ -161,13 +174,19 @@ export default function SimulationContent() {
   }, [selectedChoiceId, scenarioChoices]);
   // --------------------------------------------------------
 
+  // --- Update handleInputChange for new number inputs ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
+    
+    // Handle numeric inputs specifically, allowing decimals
+    const isNumericField = ['initialInvestment', 'monthlyContribution', 'timeHorizonYears', 'annualInflationRate', 'annualFeeRate'].includes(name);
+
     setParams(prev => ({
       ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value,
+      [name]: isNumericField ? parseFloat(value) || 0 : value,
     }));
   };
+  // -----------------------------------------------------
 
   const handleScenarioSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedScenarioId(e.target.value);
@@ -180,14 +199,15 @@ export default function SimulationContent() {
     setResult(null);
   };
 
+  // --- Update runSimulation to pass new params ---
   const runSimulation = async () => {
     setIsLoading(true);
     setResult(null);
     
-    // --- Apply Scenario Impact --- 
-    let adjustedParams = { ...params }; 
-    let scenarioImpactText = "No scenario applied.";
+    let adjustedParams = { ...params }; // Now includes inflation/fees
 
+    // --- Apply Scenario Impact (NO CHANGE NEEDED HERE YET) --- 
+    // Scenarios currently only impact investment/contribution, not inflation/fees
     if (selectedScenario && selectedChoice) {
       const impact = selectedChoice.impact;
       adjustedParams.initialInvestment += (impact.initialInvestmentChange ?? 0);
@@ -199,76 +219,85 @@ export default function SimulationContent() {
       adjustedParams.initialInvestment = Math.max(0, adjustedParams.initialInvestment);
       adjustedParams.monthlyContribution = Math.max(0, adjustedParams.monthlyContribution);
 
-      scenarioImpactText = `Scenario: ${selectedScenario.title}. Choice: ${selectedChoice.text}.`;
       console.log("Applied scenario impact:", impact);
     }
-    console.log("Running simulation with adjusted params:", adjustedParams);
-    // ---------------------------
+    // -------------------------------------------------------
+
+    console.log("Running simulation with params:", adjustedParams); // Log all params
 
     await new Promise(resolve => setTimeout(resolve, 200)); 
-    const simulationOutput = calculatePortfolioGrowth(adjustedParams); // Use adjusted params
+    // Pass the full adjustedParams including inflation/fees
+    const simulationOutput = calculatePortfolioGrowth(adjustedParams); 
     setResult(simulationOutput);
     setIsLoading(false);
   };
+  // -----------------------------------------------
 
-  // --- Handle Save Simulation ---
+  // --- Update handleSaveSimulation to include new params ---
   const handleSaveSimulation = async () => {
     if (!user || !result || isSaving) return;
 
-    // *** Ask for optional name ***
     const simulationName = prompt("Enter an optional name for this simulation:", 
-                                `Sim - ${new Date().toLocaleDateString()}` // Default name
-                           );
-    // If user cancels prompt, simulationName will be null. We proceed anyway.
-    // ---------------------------
-
+                                `Sim - ${new Date().toLocaleDateString()}`);
+    
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
 
-    // Apply scenario impact again to get the adjusted params used for the result
-    let adjustedParams = { ...params }; 
+    let adjustedParams = { ...params }; // Includes base inflation/fees
+     // Apply scenario impact again (if scenarios modify base investment/contribution)
     if (selectedScenario && selectedChoice) {
-        const impact = selectedChoice.impact;
-        adjustedParams.initialInvestment += (impact.initialInvestmentChange ?? 0);
-        adjustedParams.initialInvestment -= (impact.oneOffCost ?? 0);
-        adjustedParams.initialInvestment += (impact.oneOffIncome ?? 0);
-        adjustedParams.monthlyContribution += (impact.monthlyContributionChange ?? 0);
-        adjustedParams.initialInvestment = Math.max(0, adjustedParams.initialInvestment);
-        adjustedParams.monthlyContribution = Math.max(0, adjustedParams.monthlyContribution);
+      const impact = selectedChoice.impact;
+      adjustedParams.initialInvestment += (impact.initialInvestmentChange ?? 0);
+      adjustedParams.initialInvestment -= (impact.oneOffCost ?? 0);
+      adjustedParams.initialInvestment += (impact.oneOffIncome ?? 0);
+      adjustedParams.monthlyContribution += (impact.monthlyContributionChange ?? 0);
+      adjustedParams.initialInvestment = Math.max(0, adjustedParams.initialInvestment);
+      adjustedParams.monthlyContribution = Math.max(0, adjustedParams.monthlyContribution);
     }
 
     const { error } = await supabase
       .from('saved_simulations')
       .insert({
         user_id: user.id,
-        simulation_name: simulationName, // Use the name from prompt (or null if cancelled)
+        simulation_name: simulationName, 
         initial_investment: adjustedParams.initialInvestment,
         monthly_contribution: adjustedParams.monthlyContribution,
         time_horizon_years: adjustedParams.timeHorizonYears,
         risk_level: adjustedParams.riskLevel,
+        // -- Save new parameters --
+        annual_inflation_rate: adjustedParams.annualInflationRate,
+        annual_fee_rate: adjustedParams.annualFeeRate,
+        // -------------------------
         scenario_id: selectedScenario?.id || null,
         scenario_choice_id: selectedChoice?.id || null,
         final_balance: result.finalBalance,
+        // -- Optionally save real balance if calculated --
+        final_balance_real: result.finalBalanceReal, 
+        // ------------------------------------------------
         total_contributions: result.totalContributions,
         total_growth: result.totalGrowth,
       });
 
-    if (error) {
-      console.error("Error saving simulation:", error.message);
-      setSaveError("Failed to save simulation. Please try again.");
-    } else {
-      setSaveSuccess(true);
-      // Hide success message after a few seconds
-      setTimeout(() => setSaveSuccess(false), 3000);
-    }
-    setIsSaving(false);
+     if (error) {
+        // Check if error is due to missing columns
+        if (error.message.includes('column "annual_inflation_rate" of relation "saved_simulations" does not exist') ||
+            error.message.includes('column "annual_fee_rate" of relation "saved_simulations" does not exist')) {
+            setSaveError("DB Error: Inflation/Fee columns missing. Please update table.");
+            console.error("Missing columns in saved_simulations table for inflation/fees.");
+        } else {
+            console.error("Error saving simulation:", error.message);
+            setSaveError("Failed to save simulation. Please try again.");
+        }
+     } else {
+       setSaveSuccess(true);
+       setTimeout(() => setSaveSuccess(false), 3000);
+     }
+     setIsSaving(false);
   };
-  // -----------------------------
+  // -------------------------------------------------------
 
-  // --- Get current allocation based on selected risk level ---
   const currentAllocation = riskLevelAllocations[params.riskLevel];
-  // ----------------------------------------------------------
 
   // JSX for the client component
   return (
@@ -335,6 +364,38 @@ export default function SimulationContent() {
               </p>
               {/* ------------------------- */}
             </div>
+
+            {/* --- Inflation Input --- */}
+            <div>
+              <label htmlFor="annualInflationRate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Annual Inflation (%)</label>
+              <input
+                type="number"
+                name="annualInflationRate"
+                id="annualInflationRate"
+                value={params.annualInflationRate}
+                onChange={handleInputChange}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                step="0.1"
+                min="0"
+              />
+            </div>
+            {/* ----------------------- */}
+
+            {/* --- Fee Input --- */}
+            <div>
+              <label htmlFor="annualFeeRate" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Estimated Annual Fees (%)</label>
+              <input
+                type="number"
+                name="annualFeeRate"
+                id="annualFeeRate"
+                value={params.annualFeeRate}
+                onChange={handleInputChange}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                step="0.1"
+                min="0"
+              />
+            </div>
+            {/* ---------------- */}
 
             {/* Scenario Selection Section (Add below parameters) */}
             <div>
@@ -408,10 +469,18 @@ export default function SimulationContent() {
           {isLoading && <p>Calculating results...</p>}
           {result && !isLoading && (
             <div className="space-y-3">
-              <p className="text-lg">Projected Balance: <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalance.toLocaleString()}</span></p>
+              {/* --- Update Results Display --- */}
+              <p className="text-lg">Projected Balance (Nominal): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalance.toLocaleString()}</span></p>
+              {/* Add display for real balance */}
+              {result.finalBalanceReal !== undefined && (
+                <p className="text-md">Projected Balance (Real, adjusted for inflation): <span className="font-semibold">£{result.finalBalanceReal.toLocaleString()}</span></p>
+              )}
               <p className="text-md">Total Contributions: <span className="font-semibold">£{result.totalContributions.toLocaleString()}</span></p>
-              <p className="text-md">Estimated Growth: <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
-              
+              <p className="text-md">Estimated Growth (Nominal): <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
+              {/* Add note about rates used */}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees)</p>
+               {/* ----------------------------- */}
+
               {/* Recharts Line Chart - Add check for monthlyData */}
               {result.monthlyData && result.monthlyData.length > 0 ? (
                 <div className="mt-6 h-80">

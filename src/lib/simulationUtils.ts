@@ -3,12 +3,15 @@ interface CalculatePortfolioGrowthParams {
   monthlyContribution: number;
   timeHorizonYears: number;
   riskLevel: 'conservative' | 'moderate' | 'aggressive';
+  annualInflationRate: number; // As percentage e.g. 2.5
+  annualFeeRate: number;       // As percentage e.g. 0.5
 }
 
 interface PortfolioGrowthResult {
   finalBalance: number;
   totalContributions: number;
   totalGrowth: number;
+  finalBalanceReal?: number; // Optional real balance
   monthlyData: { month: number; balance: number }[]; // For charting
 }
 
@@ -30,36 +33,62 @@ export const riskLevelAllocations = {
 export const calculatePortfolioGrowth = (
   params: CalculatePortfolioGrowthParams
 ): PortfolioGrowthResult => {
-  const { initialInvestment, monthlyContribution, timeHorizonYears, riskLevel } = params;
+  const {
+    initialInvestment,
+    monthlyContribution,
+    timeHorizonYears,
+    riskLevel,
+    annualInflationRate,
+    annualFeeRate,
+  } = params;
 
-  // --- Calculate Weighted Annual Rate ---
+  // --- Calculate Weighted Annual Rate (Nominal) ---
   const allocation = riskLevelAllocations[riskLevel];
   const weightedAnnualRate = (
     (allocation.stocks * expectedAnnualReturns.stocks) +
     (allocation.bonds * expectedAnnualReturns.bonds) +
     (allocation.cash * expectedAnnualReturns.cash)
   );
-  // ------------------------------------
+  // -----------------------------------------------
 
-  const monthlyRate = Math.pow(1 + weightedAnnualRate, 1 / 12) - 1;
+  // --- Convert Percentage Rates to Decimals ---
+  const feeRateDecimal = annualFeeRate / 100;
+  const inflationRateDecimal = annualInflationRate / 100;
+  // -----------------------------------------
+
+  // --- Calculate Effective Monthly Rates ---
+  // Adjust nominal rate by fees first
+  const annualRateAfterFees = weightedAnnualRate - feeRateDecimal;
+  const monthlyRateAfterFees = Math.pow(1 + annualRateAfterFees, 1 / 12) - 1;
+  
+  // Calculate monthly inflation rate (optional - needed if calculating real balance monthly)
+  // const monthlyInflationRate = Math.pow(1 + inflationRateDecimal, 1 / 12) - 1;
+  // -------------------------------------
+
   const totalMonths = timeHorizonYears * 12;
 
   let balance = initialInvestment;
   const monthlyData: { month: number; balance: number }[] = [{ month: 0, balance }];
 
   for (let month = 1; month <= totalMonths; month++) {
-    // Add contribution first, then apply growth
     balance += monthlyContribution;
-    balance *= (1 + monthlyRate);
+    // Apply growth rate AFTER fees are accounted for
+    balance *= (1 + monthlyRateAfterFees); 
     monthlyData.push({ month, balance: Math.round(balance * 100) / 100 });
   }
 
-  const finalBalance = balance;
+  const finalBalance = balance; // This is the nominal balance
   const totalContributions = initialInvestment + (monthlyContribution * totalMonths);
   const totalGrowth = finalBalance - totalContributions;
 
+  // --- Optional: Calculate Final Real Balance ---
+  // Adjust the final nominal balance for cumulative inflation over the horizon
+  const finalBalanceReal = finalBalance / Math.pow(1 + inflationRateDecimal, timeHorizonYears);
+  // --------------------------------------------
+
   return {
     finalBalance: Math.round(finalBalance * 100) / 100,
+    finalBalanceReal: Math.round(finalBalanceReal * 100) / 100,
     totalContributions: Math.round(totalContributions * 100) / 100,
     totalGrowth: Math.round(totalGrowth * 100) / 100,
     monthlyData,

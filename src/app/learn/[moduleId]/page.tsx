@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import Tooltip from '@/components/Tooltip';
 import React from 'react';
 import QuizComponent from '@/components/QuizComponent';
@@ -177,7 +178,7 @@ export async function generateStaticParams() {
 // Needs glossary passed down or fetched/imported if kept separate
 let glossaryRegex: RegExp; // Keep regex generation logic
 
-const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, glossary: Map<string, string> }) => {
+const RenderContentBlock = ({ block, glossary, lessonId }: { block: AppContentBlock, glossary: Map<string, string>, lessonId: string }) => {
     // Regenerate regex if glossary changes (or generate once outside)
     if (!glossaryRegex || glossaryRegex.source !== `\\b(${Array.from(glossary.keys()).map(term => term.replace(/[.*+?^${}()|[\\]]/g, '\\$&')).join('|')})\\b`) {
         const glossaryTerms = Array.from(glossary.keys());
@@ -196,6 +197,28 @@ const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, gloss
       return <p className="font-semibold my-2">{block.content}</p>; // Fallback for level 1 or unexpected
     case 'text':
       const parts = block.content.split(glossaryRegex);
+      // --- Add conditional links based on lessonId or content --- 
+      let trySimulatorLink = null;
+      // Example for Compounding Lesson (assuming lessonId 'intro-lesson-1')
+      if (lessonId === 'intro-lesson-1' && block.content.toLowerCase().includes('compound interest')) {
+         trySimulatorLink = (
+            <Link href="/simulation?timeHorizonYears=25" 
+                  className="ml-2 inline-block bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold py-1 px-2 rounded">
+               Try with Long Horizon
+            </Link>
+         );
+      }
+      // Example for Risk Lesson (assuming lessonId 'intro-lesson-2')
+      if (lessonId === 'intro-lesson-2' && block.content.toLowerCase().includes('risk tolerance')) {
+         trySimulatorLink = (
+            <span className="ml-2">
+               <Link href="/simulation?riskLevel=conservative" className="mr-1 inline-block bg-green-500 hover:bg-green-600 text-white text-xs font-semibold py-1 px-2 rounded">Try Conservative</Link>
+               <Link href="/simulation?riskLevel=moderate" className="mr-1 inline-block bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-semibold py-1 px-2 rounded">Try Moderate</Link>
+               <Link href="/simulation?riskLevel=aggressive" className="inline-block bg-red-500 hover:bg-red-600 text-white text-xs font-semibold py-1 px-2 rounded">Try Aggressive</Link>
+            </span>
+         );
+      }
+      // -------------------------------------------------------
       return (
         <p className="my-2 text-gray-900">
           {parts.map((part, index) => {
@@ -213,6 +236,8 @@ const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, gloss
               return <React.Fragment key={index}>{part}</React.Fragment>;
             }
           })}
+          {/* Append the link if it exists for this block */} 
+          {trySimulatorLink} 
         </p>
       );
     case 'image':
@@ -285,7 +310,7 @@ export default async function ModulePage({ params }: { params: { moduleId: strin
         console.log(`Rendering lesson section: ${lesson.title}`); // Log lesson section render
         const isLessonComplete = completedLessonIds.has(lesson.id);
         return (
-          <section key={lesson.id} className="mb-8 p-4 border rounded shadow-sm relative">
+          <section key={lesson.id} className="mb-8 p-4 border rounded shadow-sm relative bg-white dark:bg-gray-800">
              {/* ... Completed span ... */}
              {isLessonComplete && (
                 <span className="absolute top-2 right-2 text-xs text-green-600 font-semibold">Completed</span>
@@ -299,7 +324,7 @@ export default async function ModulePage({ params }: { params: { moduleId: strin
                 {lesson.contentBlocks.length === 0 && <p className="text-sm text-gray-500 italic">[No content blocks found for this lesson]</p>} {/* Add placeholder if no blocks */}
                 {lesson.contentBlocks.map((block, blockIndex) => {
                   // console.log(`  Rendering block ${blockIndex}, type: ${block.type}`); // Optional: verbose block rendering log
-                  return <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} glossary={glossary} />;
+                  return <RenderContentBlock key={`${lesson.id}-block-${blockIndex}`} block={block} glossary={glossary} lessonId={lesson.id} />;
                 })}
               </div>
 

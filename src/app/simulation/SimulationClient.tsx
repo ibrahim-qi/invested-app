@@ -484,7 +484,7 @@ export default function SimulationContent() {
               <p className="text-lg">Projected Balance Range (Nominal):</p>
               <div className="pl-4 text-md">
                  <p>Median (P50): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalanceP50.toLocaleString()}</span></p>
-                 <p className="text-sm text-gray-600 dark:text-gray-400">Range (P10 - P90): £{result.finalBalanceP10.toLocaleString()} - £{result.finalBalanceP90.toLocaleString()}</p>
+                 <p className="text-sm text-gray-600 dark:text-gray-300">Range (P10 - P90): £{result.finalBalanceP10.toLocaleString()} - £{result.finalBalanceP90.toLocaleString()}</p>
               </div>
 
               {result.finalBalanceReal !== undefined && (
@@ -495,10 +495,10 @@ export default function SimulationContent() {
               
               {/* Assumed Rate and Fees (Use optional chaining just in case) */}
               {result.weightedAnnualRate !== undefined && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">Assumed Avg. Annual Return (portfolio mean): <span className="font-semibold">{formatPercent(result.weightedAnnualRate)}</span></p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Assumed Avg. Annual Return (portfolio mean): <span className="font-semibold">{formatPercent(result.weightedAnnualRate)}</span></p>
               )}
               {result.totalFeesPaid !== undefined && (
-                <p className="text-sm text-gray-600 dark:text-gray-400">Estimated Median Total Fees Paid: <span className="font-semibold">£{result.totalFeesPaid.toLocaleString()}</span></p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Estimated Median Total Fees Paid: <span className="font-semibold">£{result.totalFeesPaid.toLocaleString()}</span></p>
               )}
 
               {/* Contextual Suggestion */}
@@ -509,7 +509,7 @@ export default function SimulationContent() {
                 </p>
               )}
 
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees. Projections show potential range.)</p>
+              <p className="text-xs text-gray-500 dark:text-gray-300 mt-1">(Based on {params.annualInflationRate}% estimated inflation and {params.annualFeeRate}% fees. Projections show potential range.)</p>
               {/* ------------------------------------------------- */}
               
               {/* --- Update Chart Data Source --- */}

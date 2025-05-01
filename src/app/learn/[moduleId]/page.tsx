@@ -197,7 +197,7 @@ const RenderContentBlock = ({ block, glossary }: { block: AppContentBlock, gloss
     case 'text':
       const parts = block.content.split(glossaryRegex);
       return (
-        <p className="my-2 text-gray-700 dark:text-gray-300">
+        <p className="my-2 text-gray-900">
           {parts.map((part, index) => {
             const lowerCasePart = part?.toLowerCase();
             const isGlossaryTerm = glossary.has(lowerCasePart); // Check against map

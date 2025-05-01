@@ -2,12 +2,12 @@ import Link from 'next/link';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-12 text-center">
-      <div className="max-w-2xl">
-        <h1 className="text-4xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-6xl mb-6">
+    <main className="flex flex-grow flex-col items-center justify-center p-12 text-center">
+      <div className="max-w-2xl py-16 sm:py-24">
+        <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl mb-6">
           Welcome to InvestEd
         </h1>
-        <p className="text-lg leading-8 text-gray-600 dark:text-gray-300 mb-10">
+        <p className="text-lg leading-8 text-gray-600 mb-10">
           Your personal guide to understanding investment principles. Learn core concepts and apply them in realistic simulations designed specifically for postgraduate students navigating their early financial journey.
         </p>
         <div className="flex items-center justify-center gap-x-6">

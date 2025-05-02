@@ -1,140 +1,97 @@
-import Link from 'next/link';
+'use server';
+
 import { createServerClient } from '@/lib/supabase/server';
-import { CheckCircleIcon } from '@heroicons/react/24/solid';
-import type { Database } from '@/lib/database.types'; // Import full DB types
-import { redirect } from 'next/navigation'; // Import redirect
+import type { Database } from '@/lib/database.types';
+import { redirect } from 'next/navigation';
+import { BookOpenIcon } from '@heroicons/react/24/outline'; // Example Icon
 
-type Module = Database['public']['Tables']['learning_modules']['Row'];
-
-type Lesson = Database['public']['Tables']['lessons']['Row']; // Need this type too
-
-// Helper function to fetch lessons for a module (to check completion)
-// We only need the IDs here
-async function getLessonsForModule(
-  supabase: ReturnType<typeof createServerClient>,
-  moduleId: string
-): Promise<{ id: string }[]> { // Return only IDs
-  const { data, error } = await supabase
-    .from('lessons')
-    .select('id')
-    .eq('module_id', moduleId);
-
-  if (error) {
-    console.error(`Error fetching lessons for module ${moduleId}:`, error.message);
-    return [];
-  }
-  return data || [];
-}
-
-// Fetch user's completed lessons
-async function getUserCompletedLessons(
-  supabase: ReturnType<typeof createServerClient>,
-  userId: string
-): Promise<Set<string>> {
-  const { data: progressData, error: progressError } = await supabase
-    .from('user_lesson_progress')
-    .select('lesson_id')
-    .eq('user_id', userId);
-  if (progressError) {
-    console.error('Error fetching user progress:', progressError.message);
-    return new Set<string>();
-  }
-  return new Set(progressData.map((p: { lesson_id: string }) => p.lesson_id));
-}
+// Define the Concept type based on your schema
+// Ensure 'category', 'title', 'summary', 'id' exist
+// MANUALLY ADD category and summary if not in generated types
+type Concept = Database['public']['Tables']['concepts']['Row'] & {
+    category?: string | null; // Add manually
+    summary?: string | null;  // Add manually
+};
 
 export default async function LearnPage() {
   const supabase = createServerClient();
 
-  // --- Add Authentication Check ---
+  // --- Authentication Check ---
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    redirect('/login?message=Please login to view learning modules');
+    redirect('/login?message=Please login to browse learning concepts');
   }
   // -----------------------------
 
-  // Fetch Modules from DB
-  const { data: modulesData, error: modulesError } = await supabase
-    .from('learning_modules')
+  // Fetch all concepts from the DB, ordered by category then title
+  const { data: conceptsData, error: conceptsError } = await supabase
+    .from('concepts')
     .select('*')
-    .order('module_order', { ascending: true });
+    .order('category', { ascending: true })
+    .order('title', { ascending: true });
 
-  if (modulesError) {
-    console.error("Error fetching learning modules:", modulesError.message);
-    // Handle error display
-    return <p className="text-red-500">Error loading learning modules.</p>;
+  if (conceptsError) {
+    console.error("Error fetching concepts:", conceptsError.message);
+    return <p className="text-red-500">Error loading learning concepts.</p>;
   }
 
-  const modules: Module[] = modulesData || [];
+  // Cast through unknown to align with manually adjusted type
+  const concepts: Concept[] = (conceptsData as unknown as Concept[]) || [];
 
-  // Get user session & progress (existing logic)
-  const { data: { session } } = await supabase.auth.getSession();
-  const userId = session?.user?.id;
-  let completedLessonIds = new Set<string>();
-  if (userId) {
-    const { data: progressData, error: progressError } = await supabase
-      .from('user_lesson_progress')
-      .select('lesson_id')
-      .eq('user_id', userId);
-    if (progressError) {
-      console.error('Error fetching user progress:', progressError.message);
-    } else if (progressData) {
-      completedLessonIds = new Set(progressData.map(p => p.lesson_id));
+  // Group concepts by category
+  const conceptsByCategory: { [category: string]: Concept[] } = {};
+  concepts.forEach(concept => {
+    // Access manually added category field
+    const category = concept.category || 'Uncategorized'; // Default category if null/empty
+    if (!conceptsByCategory[category]) {
+      conceptsByCategory[category] = [];
     }
-  }
+    conceptsByCategory[category].push(concept);
+  });
 
-  // Create a map for quick lookup of module lessons for completion check
-  const moduleLessonsMap = new Map<string, string[]>();
-  for (const module of modules) {
-     const lessons = await getLessonsForModule(supabase, module.id);
-     moduleLessonsMap.set(module.id, lessons.map(l => l.id));
-  }
-
-  // Calculate completion status for each module
-  const moduleCompletionStatus = new Map<string, boolean>();
-  for (const module of modules) {
-      const lessons = await getLessonsForModule(supabase, module.id);
-      const isComplete = lessons.length > 0 && lessons.every(lesson => completedLessonIds.has(lesson.id));
-      moduleCompletionStatus.set(module.id, isComplete);
-  }
+  const categories = Object.keys(conceptsByCategory).sort(); // Sort category names alphabetically
 
   return (
-    <div className="container mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">Learning Modules</h1>
-      {modules.length === 0 && <p>No learning modules available yet.</p>}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {modules.map((module) => {
-          const moduleLessonIds = moduleLessonsMap.get(module.id) || [];
-          const totalLessonsInModule = moduleLessonIds.length;
-          const completedLessonsInModule = moduleLessonIds.filter(lessonId => completedLessonIds.has(lessonId)).length;
-          const isModuleComplete = userId && totalLessonsInModule > 0 && completedLessonsInModule === totalLessonsInModule;
+    <div className="container mx-auto p-4 sm:p-6 lg:p-8">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">Learning Concepts</h1>
+      
+      {concepts.length === 0 && (
+        <p className="text-gray-600">No learning concepts available yet.</p>
+      )}
 
-          return (
-            <Link key={module.id} href={`/learn/${module.id}`} legacyBehavior>
-              <a className="relative block h-full p-6 bg-white rounded-lg border border-gray-200 shadow-md hover:bg-gray-100 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 flex flex-col">
-                {isModuleComplete && (
-                  <CheckCircleIcon className="absolute top-3 right-3 h-6 w-6 text-green-500" title="Module Completed" />
-                )}
-                <h2 className="mb-2 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
-                  {module.title}
-                </h2>
-                <p className="font-normal text-gray-700 dark:text-gray-400 mb-3 flex-grow">
-                  {module.description}
-                </p>
-                {userId && totalLessonsInModule > 0 && (
-                   <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
-                       {completedLessonsInModule} / {totalLessonsInModule} Lessons Completed
+      {categories.map((category) => (
+        <div key={category} className="mb-8">
+          <h2 className="text-2xl font-semibold mb-4 text-indigo-700 border-b pb-2">
+            {category}
+          </h2>
+          {conceptsByCategory[category].length === 0 ? (
+            <p className="text-sm text-gray-500">No concepts in this category yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {conceptsByCategory[category].map((concept) => (
+                // Basic card display - can link to a modal or detail page later
+                <div 
+                  key={concept.id} 
+                  className="block p-4 bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-200 cursor-pointer" 
+                  // TODO: Add onClick to open modal or navigate to a detail page
+                  // onClick={() => openConceptModal(concept)}
+                >
+                  <div className="flex items-center mb-2">
+                      <BookOpenIcon className="h-5 w-5 text-indigo-500 mr-2 flex-shrink-0" />
+                      <h3 className="text-lg font-semibold text-gray-800 truncate" title={concept.title}>
+                         {concept.title}
+                      </h3>
                    </div>
-                )}
-                {!userId && totalLessonsInModule > 0 && (
-                   <div className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
-                       {totalLessonsInModule} Lessons
-                   </div>
-                )}
-              </a>
-            </Link>
-          );
-        })}
-      </div>
+                  <p className="text-sm text-gray-600 line-clamp-3">
+                    {/* Access manually added summary field */}
+                    {concept.summary || 'No summary available.'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 } 

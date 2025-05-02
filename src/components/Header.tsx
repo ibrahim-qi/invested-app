@@ -46,6 +46,7 @@ const Header = () => {
 
           {user ? (
             <div className="flex items-center space-x-4">
+              <Link href="/analysis" className="text-gray-300 hover:text-white transition-colors text-base">Analysis</Link>
               <Link href="/dashboard" className="text-gray-300 hover:text-white transition-colors text-base">Dashboard</Link>
               <span className="text-sm text-gray-400">{user.email}</span>
               <button

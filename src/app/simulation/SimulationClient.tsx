@@ -318,7 +318,7 @@ export default function SimulationContent() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {/* Input Parameters Section */}
         <div className="md:col-span-1 bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow">
-          <h2 className="text-xl font-semibold mb-4">Parameters</h2>
+          <h2 className="text-xl font-semibold mb-4 dark:text-gray-100">Parameters</h2>
           <div className="space-y-4">
             <div>
               <label htmlFor="initialInvestment" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Initial Investment (£)</label>
@@ -440,7 +440,7 @@ export default function SimulationContent() {
                          onChange={() => handleChoiceSelect(choice.id)}
                          className="mr-2"
                        />
-                       <span className="text-sm">{choice.text}</span>
+                       <span className="text-sm dark:text-gray-200">{choice.text}</span>
                     </label>
                   );
                 })}
@@ -462,7 +462,7 @@ export default function SimulationContent() {
         {/* Results Display Section */}
         <div className="md:col-span-2 bg-white dark:bg-gray-900 p-6 rounded-lg shadow">
           <div className="flex justify-between items-start mb-4">
-             <h2 className="text-xl font-semibold">Results</h2>
+             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Results</h2>
              {/* --- Save Button --- */} 
              {user && result && !isLoading && (
                 <button 
@@ -480,18 +480,16 @@ export default function SimulationContent() {
           {isLoading && <p>Calculating results...</p>}
           {result && !isLoading && (
             <div className="space-y-3">
-              {/* --- Update Results Display for Percentiles --- */}
-              <p className="text-lg">Projected Balance Range (Nominal):</p>
-              <div className="pl-4 text-md">
-                 <p>Median (P50): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalanceP50.toLocaleString()}</span></p>
-                 <p className="text-sm text-gray-600 dark:text-gray-300">Range (P10 - P90): £{result.finalBalanceP10.toLocaleString()} - £{result.finalBalanceP90.toLocaleString()}</p>
-              </div>
-
+              {/* Nominal Balance */}
+              <p className="text-lg">Projected Balance (Nominal): <span className="font-bold text-green-600 dark:text-green-400">£{result.finalBalance.toLocaleString()}</span></p>
+              {/* Real Balance */}
               {result.finalBalanceReal !== undefined && (
-                <p className="text-md">Median Balance (Real, adjusted for inflation): <span className="font-semibold">£{result.finalBalanceReal.toLocaleString()}</span></p>
+                <p className="text-md">Projected Balance (Real, adjusted for inflation): <span className="font-semibold">£{result.finalBalanceReal.toLocaleString()}</span></p>
               )}
+              {/* Contributions */}
               <p className="text-md">Total Contributions: <span className="font-semibold">£{result.totalContributions.toLocaleString()}</span></p>
-              <p className="text-md">Median Estimated Growth (Nominal): <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
+              {/* Nominal Growth */}
+              <p className="text-md">Estimated Growth (Nominal): <span className="font-semibold text-green-700 dark:text-green-500">£{result.totalGrowth.toLocaleString()}</span></p>
               
               {/* Assumed Rate and Fees (Use optional chaining just in case) */}
               {result.weightedAnnualRate !== undefined && (
@@ -503,7 +501,7 @@ export default function SimulationContent() {
 
               {/* Contextual Suggestion */}
               {params.riskLevel === 'aggressive' && (
-                 <p className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-sm text-yellow-800 dark:text-yellow-200">
+                <p className="mt-3 p-2 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-sm text-yellow-800 dark:text-yellow-200">
                   Using an aggressive strategy? Consider reviewing the 'Risk Management' learning module for important concepts. 
                   {/* Optional: <Link href="/learn/risk-module-id" className="font-semibold underline hover:text-yellow-600"> Learn More</Link> */}
                 </p>

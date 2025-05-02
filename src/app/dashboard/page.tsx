@@ -113,7 +113,7 @@ export default async function DashboardPage() {
   // -----------------------------------------------------
 
   return (
-    <div className="p-8">
+    <div className="container mx-auto p-8">
       <h1 className="text-3xl font-bold mb-8">Welcome back, <span className="font-medium text-gray-700">{user.email}!</span></h1>
 
       {recommendedModule ? (
@@ -141,17 +141,19 @@ export default async function DashboardPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 transition-shadow duration-150 hover:shadow-lg">
           <h2 className="text-xl font-semibold mb-5 text-gray-800">Module Progress</h2>
           {modules.length > 0 ? (
             <ul className="space-y-4">
-              {modules.map((module) => {
+              {modules.map((module, index) => {
                 const moduleLessonIds = moduleToLessonIdsMap.get(module.id) || [];
                 const isModuleComplete = moduleLessonIds.length > 0 && moduleLessonIds.every(lessonId => completedLessonIds.has(lessonId));
+                // Remove border from last item
+                const isLastItem = index === modules.length - 1;
                 return (
                   <li 
                     key={module.id} 
-                    className="border-b border-gray-200 pb-4 flex justify-between items-center"
+                    className={`pb-4 flex justify-between items-center ${!isLastItem ? 'border-b border-gray-200' : ''}`}
                   >
                     <Link href={`/learn/${module.id}`} className="hover:text-indigo-600 flex-grow font-medium text-gray-700 text-base mr-4">
                       {module.title}
@@ -174,14 +176,14 @@ export default async function DashboardPage() {
           )}
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 transition-shadow duration-150 hover:shadow-lg">
           <h2 className="text-xl font-semibold mb-5 text-gray-800">Recent Simulations</h2>
           {savedSimulations.length > 0 ? (
             <ul className="space-y-5">
               {savedSimulations.map((sim) => {
                 const queryString = createSimulationQueryString(sim);
                 return (
-                  <li key={sim.id} className="p-4 border rounded-md bg-gray-50 flex flex-col space-y-3 hover:shadow-lg transition-shadow duration-150 ease-in-out">
+                  <li key={sim.id} className="p-4 border rounded-md bg-gray-50 flex flex-col space-y-3 hover:shadow-lg transition-shadow duration-150 ease-in-out hover:bg-gray-100">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="block text-xs font-medium text-gray-500">

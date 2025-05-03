@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Database } from '@/lib/database.types';
+import ConceptRenderer from './learning/ConceptRenderer';
 
 type Concept = Database['public']['Tables']['concepts']['Row'];
 
@@ -28,9 +29,13 @@ const ConceptModal: React.FC<ConceptModalProps> = ({ isOpen, onClose, concept })
 
         {/* Modal Content */}
         <h2 className="text-2xl font-semibold mb-4 text-gray-800">{concept.title}</h2>
-        <div className="prose prose-sm max-w-none text-gray-600">
-            {/* We might need more sophisticated rendering if content includes markdown/HTML */}
-           <p>{concept.content}</p> 
+        <div className="prose prose-sm max-w-none text-gray-600 overflow-y-auto max-h-[70vh] pr-2">
+            {/* Render content using ConceptRenderer */}
+            {concept.content ? (
+                <ConceptRenderer content={concept.content} conceptId={concept.id} />
+            ) : (
+                <p className="italic text-gray-500">No content available for this concept.</p>
+            )}
         </div>
         <div className="mt-6 text-right">
           <button

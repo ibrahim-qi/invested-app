@@ -1,0 +1,26 @@
+{
+  "diversification": {
+    "term": "Diversification",
+    "definition": "Spreading your investments across various asset classes (like stocks, bonds, real estate) or sectors to reduce the impact of any single investment performing poorly."
+  },
+  "asset allocation": {
+    "term": "Asset Allocation",
+    "definition": "The strategy of dividing your investment portfolio among different asset categories, such as stocks, bonds, and cash, based on your risk tolerance, goals, and time horizon."
+  },
+  "risk tolerance": {
+    "term": "Risk Tolerance",
+    "definition": "An investor's ability and willingness to stomach large swings in the value of their investments."
+  },
+  "compound interest": {
+    "term": "Compound Interest",
+    "definition": "Interest calculated on the initial principal, which also includes all of the accumulated interest from previous periods. Often called \"interest on interest\"."
+  },
+  "stocks": {
+    "term": "Stocks",
+    "definition": "Securities that represent ownership in a corporation. Also known as shares or equity."
+  },
+  "bonds": {
+    "term": "Bonds",
+    "definition": "A type of debt security where an investor loans money to an entity (like a government or corporation) which borrows the funds for a defined period at a variable or fixed interest rate."
+  }
+} 

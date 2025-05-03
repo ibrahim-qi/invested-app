@@ -271,6 +271,8 @@ export default function PersonalizationWizard() {
             }
 
             console.log('Onboarding successful:', result);
+            // Refresh router state before pushing
+            router.refresh(); 
             // Redirect to the dashboard or a success page
             router.push('/dashboard'); // Adjust target route as needed
 

@@ -1,0 +1,82 @@
+{
+  "asset": {
+    "term": "Asset",
+    "definition": "Anything of value owned by an individual or company, such as stocks, bonds, real estate, or cash."
+  },
+  "asset allocation": {
+    "term": "Asset Allocation",
+    "definition": "The strategy of dividing your investment portfolio among different asset categories, such as stocks, bonds, and cash, based on your risk tolerance, goals, and time horizon."
+  },
+  "bear market": {
+    "term": "Bear Market",
+    "definition": "A market condition in which the prices of securities are falling, and widespread pessimism causes the negative sentiment to be self-sustaining."
+  },
+  "benchmark": {
+    "term": "Benchmark",
+    "definition": "A standard or point of reference against which the performance of a security, mutual fund, or investment manager can be measured (e.g., S&P 500 Index)."
+  },
+  "bonds": {
+    "term": "Bonds",
+    "definition": "A type of debt security where an investor loans money to an entity (like a government or corporation) which borrows the funds for a defined period at a variable or fixed interest rate."
+  },
+  "bull market": {
+    "term": "Bull Market",
+    "definition": "A market condition in which the prices of securities are rising or are expected to rise, characterized by optimism and investor confidence."
+  },
+  "capital gains": {
+    "term": "Capital Gains",
+    "definition": "Profit from the sale of an asset (like stocks or property) that has increased in value over the holding period."
+  },
+  "compound interest": {
+    "term": "Compound Interest",
+    "definition": "Interest calculated on the initial principal, which also includes all of the accumulated interest from previous periods. Often called \"interest on interest\"."
+  },
+  "diversification": {
+    "term": "Diversification",
+    "definition": "Spreading your investments across various asset classes (like stocks, bonds, real estate) or sectors to reduce the impact of any single investment performing poorly."
+  },
+  "index fund": {
+    "term": "Index Fund",
+    "definition": "A type of mutual fund or ETF with a portfolio constructed to match or track the components of a financial market index, such as the S&P 500."
+  },
+  "inflation": {
+    "term": "Inflation",
+    "definition": "The rate at which the general level of prices for goods and services is rising, and subsequently, purchasing power is falling."
+  },
+  "investment": {
+    "term": "Investment",
+    "definition": "The act of allocating resources, usually money, with the expectation of generating an income or profit in the future."
+  },
+  "median outcome": {
+    "term": "Median Outcome",
+    "definition": "The middle value in a range of possible simulation results (e.g., P50), where half the outcomes are expected to be higher and half lower."
+  },
+  "mutual fund": {
+    "term": "Mutual Fund",
+    "definition": "An investment vehicle made up of a pool of money collected from many investors to invest in securities like stocks, bonds, and other assets."
+  },
+  "portfolio": {
+    "term": "Portfolio",
+    "definition": "A collection of financial investments like stocks, bonds, commodities, cash, and cash equivalents held by an individual or organization."
+  },
+  "return": {
+    "term": "Return",
+    "definition": "The gain or loss on an investment over a specified period, expressed as a percentage increase over the initial investment cost."
+  },
+  "risk tolerance": {
+    "term": "Risk Tolerance",
+    "definition": "An investor's ability and willingness to stomach large swings in the value of their investments."
+  },
+  "stocks": {
+    "term": "Stocks",
+    "definition": "Securities that represent ownership in a corporation. Also known as shares or equity."
+  },
+  "time horizon": {
+    "term": "Time Horizon",
+    "definition": "The length of time over which an investment is expected to be held before it is needed."
+  },
+  "volatility": {
+    "term": "Volatility",
+    "definition": "A statistical measure of the dispersion of returns for a given security or market index, indicating the level of risk or uncertainty."
+  }
+} 

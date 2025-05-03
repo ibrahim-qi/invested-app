@@ -1,11 +1,17 @@
 import { Json } from "./database.types"; // Import Json type if needed for impact
 
+// --- Configuration ---
+const MONTE_CARLO_ITERATIONS = 500; // Number of simulations to run for percentile calculation
+
 // --- Define Minimal Event Types --- 
 // Avoids direct dependency on full DB types in this core util
 type EventImpact = {
   oneOffCost?: number;
   oneOffIncome?: number;
   monthlyContributionChange?: number;
+  // Add impact types for automatic events
+  annualReturnAdjustment?: number; 
+  volatilityMultiplier?: number;  
   // Add other potential impact fields as needed
 };
 
@@ -57,6 +63,8 @@ export interface PortfolioGrowthResult {
 // ------------------------------------------------------
 
 // --- Define Regional Asset Assumptions ---
+// Baseline expected returns and volatility for different asset classes.
+// These are simplified, long-term averages for educational purposes.
 const baseAssetAssumptions = {
   stocks: { meanReturn: 0.085, volatility: 0.15 }, // Generic Global Developed
   bonds:  { meanReturn: 0.035, volatility: 0.05 }, // Generic Global Aggregate
@@ -70,6 +78,7 @@ const ukAssetAssumptions = {
 };
 
 // --- Define Benchmark Assumptions ---
+// Simplified assumptions for benchmark comparisons (deterministic calculation).
 const benchmarkAssumptions = {
   globalEquity: { meanReturn: 0.085, volatility: 0.15 }, // Same as base stock assumption
   ukCash: { meanReturn: 0.018, volatility: 0.01 }, // Same as UK cash assumption
@@ -84,7 +93,8 @@ export const riskLevelAllocations = {
 // -----------------------------
 
 // --- Helper: Box-Muller transform for standard normal distribution N(0,1) ---
-// Basic approximation, not cryptographically secure randomness.
+// Generates random numbers following a normal distribution, used to simulate market volatility.
+// Basic approximation, sufficient for educational simulation.
 function randomStandardNormal(): number {
     let u = 0, v = 0;
     while(u === 0) u = Math.random(); // Converting [0,1) to (0,1)
@@ -94,6 +104,7 @@ function randomStandardNormal(): number {
 // -------------------------------------------------------------------------
 
 // --- Function to Calculate Benchmark Growth (Simplified Deterministic) ---
+// Calculates benchmark growth year-by-year using only the mean return (no volatility).
 interface CalculateBenchmarkGrowthParams {
   initialInvestment: number;
   monthlyContribution: number;
@@ -159,13 +170,23 @@ export const calculateBenchmarkGrowth = (
 };
 // -------------------------------------------------------------------
 
+/**
+ * Calculates portfolio growth over time using a Monte Carlo simulation.
+ * 
+ * @param params - The core simulation parameters (investment, contribution, horizon, risk, rates).
+ * @param events - Array of potential simulation events impacting the portfolio.
+ * @param eventChoicesMade - User decisions made for specific events.
+ * @param careerStage - User's career stage, used to adjust asset allocation.
+ * @param locationRegion - User's location, used to select asset return assumptions.
+ * @returns PortfolioGrowthResult containing yearly data across percentiles.
+ */
 export const calculatePortfolioGrowth = (
   params: CalculatePortfolioGrowthParams,
   events: SimulationEvent[] = [], 
   eventChoicesMade: Record<string, Json> = {},
   careerStage: string | null | undefined = undefined,
   locationRegion: string | null | undefined = undefined,
-  numIterations: number = 500 
+  // numIterations is now a constant: MONTE_CARLO_ITERATIONS 
 ): PortfolioGrowthResult => {
   const {
     initialInvestment,
@@ -176,7 +197,7 @@ export const calculatePortfolioGrowth = (
     annualFeeRate,
   } = params;
 
-  // Select assumptions based on region
+  // Select appropriate asset return/volatility assumptions based on location
   let assetAssumptions = baseAssetAssumptions; // Default
   if (locationRegion?.toLowerCase() === 'uk') {
     assetAssumptions = ukAssetAssumptions;
@@ -189,7 +210,8 @@ export const calculatePortfolioGrowth = (
   let baseAllocation = riskLevelAllocations[riskLevel];
   let adjustedAllocation = { ...baseAllocation }; // Copy to modify
 
-  // --- Adjust Allocation Based on Career Stage (Simplified) --- 
+  // --- Adjust Allocation Based on Career Stage (Simplified Lifecycling) --- 
+  // Reduces risk slightly as user gets closer to retirement.
   if (careerStage) {
       const stage = careerStage.toLowerCase();
       const equityAdjustment = 0.05; // +/- 5%
@@ -223,7 +245,8 @@ export const calculatePortfolioGrowth = (
   const feeRateDecimal = annualFeeRate / 100;
   const inflationRateDecimal = annualInflationRate / 100;
 
-  // --- Calculate Portfolio Expected Return & Volatility (Using selected assumptions) ---
+  // --- Calculate Portfolio Expected Return & Volatility (Weighted Average) ---
+  // Based on the final asset allocation and regional assumptions.
   const portfolioMeanReturn = (
     (allocation.stocks * assetAssumptions.stocks.meanReturn) +
     (allocation.bonds * assetAssumptions.bonds.meanReturn) +
@@ -235,156 +258,210 @@ export const calculatePortfolioGrowth = (
     (allocation.cash * assetAssumptions.cash.volatility)
   );
   
-  // Convert annual to monthly estimates (approximation)
+  // Convert annual rates to monthly estimates for simulation steps (approximation).
   const monthlyMeanReturn = Math.pow(1 + portfolioMeanReturn, 1/12) - 1;
   const monthlyVolatility = portfolioVolatility / Math.sqrt(12);
-  const annualRateAfterFees = portfolioMeanReturn - feeRateDecimal; // For fee calculation base
+  // Estimate annual return after fees for simplified fee calculation
+  const annualRateAfterFees = portfolioMeanReturn - feeRateDecimal;
   // ------------------------------------------------------------------
 
   // --- Data structure to store yearly results for EACH iteration ---
-  // Array of iterations, each containing an array of yearly snapshots
-  const iterationYearlySnapshots: { balance: number; fees: number; contribution: number; }[][] = 
-      Array(numIterations).fill(0).map(() => Array(timeHorizonYears + 1));
+  // Used to calculate percentiles (P10, P50, P90) at the end.
+  // Array of iterations, each containing an array of yearly snapshots.
+  const iterationYearlySnapshots: { balance: number; fees: number; contribution: number; growth: number; }[][] = 
+      Array(MONTE_CARLO_ITERATIONS).fill(0).map(() => Array(timeHorizonYears + 1));
   // ----------------------------------------------------------------
 
-  for (let i = 0; i < numIterations; i++) {
-    let balance = initialInvestment;
+  // --- Run Monte Carlo Simulation --- 
+  for (let i = 0; i < MONTE_CARLO_ITERATIONS; i++) {
+    let currentBalance = initialInvestment;
+    let baseMonthlyContribution = monthlyContribution; // Store the base before adjustments
+    let currentMonthlyContribution = monthlyContribution; // Mutable for the current iteration
     let cumulativeFees = 0;
-    let cumulativeContributions = initialInvestment; // Start with initial
-    let currentMonthlyContribution = monthlyContribution; // Mutable copy for event impacts
+    let cumulativeContributions = initialInvestment;
+    let cumulativeGrowth = 0;
 
-    // Store initial state for year 0
-    iterationYearlySnapshots[i][0] = { balance: balance, fees: 0, contribution: initialInvestment };
+    // Initialize snapshot for year 0
+    iterationYearlySnapshots[i][0] = { 
+        balance: currentBalance, 
+        fees: 0, 
+        contribution: initialInvestment, // Year 0 contribution is initial investment
+        growth: 0 
+    };
 
-    for (let year = 1; year <= timeHorizonYears; year++) {
-      let yearlyContribution = 0;
-      let yearlyFees = 0;
-      let startOfYearBalance = balance;
+    // Loop through each month
+    for (let month = 1; month <= totalMonths; month++) {
+      const currentYear = Math.floor((month - 1) / 12);
+      let effectiveMonthlyMeanReturn = monthlyMeanReturn; // Start with base portfolio return
+      let effectiveMonthlyVolatility = monthlyVolatility; // Start with base portfolio volatility
+      let monthlyContributionForThisMonth = currentMonthlyContribution; 
+      let oneOffImpact = 0;
 
-      // --- Apply Event Impacts for the Current Year --- 
-      const triggeredEvents = events.filter(e => e.trigger_year === year);
-      for (const event of triggeredEvents) {
-          let impactToApply: EventImpact | null = null;
+      // --- Apply Event Impacts for the start of the current year --- 
+      // Check if this is the FIRST month of a new year (after year 0)
+      if (month % 12 === 1 && currentYear > 0) { 
+          const yearEvent = events.find(e => e.trigger_year === currentYear); // Event triggers IN year X (0-indexed)
+          if (yearEvent) {
+              let impactSource: EventImpact | null | Json = null;
+              let isDecisionImpact = false;
+              // Determine the correct source of impact data
+              if (yearEvent.event_type === 'decision' && eventChoicesMade[yearEvent.id]) {
+                 impactSource = eventChoicesMade[yearEvent.id]; // Impact from user choice
+                 isDecisionImpact = true;
+              } else if (yearEvent.event_type !== 'decision' && yearEvent.impact) {
+                 impactSource = yearEvent.impact; // Impact from automatic event's impact column
+              }
 
-          // Check if it's a decision event and a choice was made
-          if (event.event_type === 'decision' && eventChoicesMade[event.id]) {
-              impactToApply = eventChoicesMade[event.id] as EventImpact;
-          } else if (event.event_type !== 'decision' && event.impact) {
-              // Apply default impact for non-decision events
-              impactToApply = event.impact as EventImpact;
-          }
-          // If it's a decision event and no choice was made, impactToApply remains null (no impact)
+              // Ensure impactSource is treated as an object for safe access
+              if (impactSource && typeof impactSource === 'object') { 
+                  // Assert impactSource to access potentially dynamic keys from JSON
+                  const impactData = impactSource as any; 
 
-          if (impactToApply) {
-              try {
-                  // Apply impacts (ensure values are numbers)
-                  const oneOffCost = Number(impactToApply.oneOffCost ?? 0);
-                  const oneOffIncome = Number(impactToApply.oneOffIncome ?? 0);
-                  const contribChange = Number(impactToApply.monthlyContributionChange ?? 0);
+                  // Safely access and convert potential impact values to numbers, defaulting to 0 or 1
+                  const returnAdj = Number(impactData.annualReturnAdjustment ?? 0);
+                  const volMultiplier = Number(impactData.volatilityMultiplier ?? 1);
+                  const contribChange = Number(impactData.monthlyContributionChange ?? 0);
+                  const income = Number(impactData.oneOffIncome ?? 0);
+                  const cost = Number(impactData.oneOffCost ?? 0);
 
-                  balance -= oneOffCost;
-                  balance += oneOffIncome;
-                  currentMonthlyContribution += contribChange;
+                  // Apply return/volatility adjustments (only from automatic events for now)
+                  if (!isDecisionImpact) { // Apply market adjustments only from non-decision events
+                      if (!isNaN(returnAdj)) {
+                          // Convert annual adjustment to approximate monthly adjustment factor
+                          const monthlyAdjFactor = Math.pow(1 + returnAdj, 1/12);
+                          effectiveMonthlyMeanReturn = (1 + effectiveMonthlyMeanReturn) * monthlyAdjFactor - 1;
+                      }
+                      if (!isNaN(volMultiplier) && volMultiplier > 0) {
+                          effectiveMonthlyVolatility *= volMultiplier;
+                      }
+                  }
 
-                  // Ensure non-negative values where applicable
-                  balance = Math.max(0, balance);
-                  currentMonthlyContribution = Math.max(0, currentMonthlyContribution);
-
-              } catch (e) {
-                  console.error(`Iteration ${i}, Year ${year}: Failed to parse or apply impact for event ${event.id}`, e);
+                  // Apply contribution change (can come from decisions or auto events)
+                  if (!isNaN(contribChange)) {
+                     currentMonthlyContribution += contribChange;
+                     currentMonthlyContribution = Math.max(0, currentMonthlyContribution);
+                     // Update the rate for the current month immediately
+                     monthlyContributionForThisMonth = currentMonthlyContribution; 
+                  }
+                  
+                  // Calculate and apply one-off impact (can come from decisions or auto events)
+                  if (!isNaN(income) && !isNaN(cost)) {
+                     oneOffImpact = income - cost;
+                     currentBalance += oneOffImpact; // Apply immediately at start of year (month 1)
+                  }
+              } else if (impactSource) {
+                  console.warn(`Event ${yearEvent.id} has impactSource but it's not an object:`, impactSource);
               }
           }
       }
-      // --------------------------------------------------
+      // ---------------------------------------------------------------
 
-      for (let monthInYear = 1; monthInYear <= 12; monthInYear++) {
-        const month = (year - 1) * 12 + monthInYear;
+      // Add monthly contribution (use the rate determined for this month/year)
+      currentBalance += monthlyContributionForThisMonth;
+      currentBalance = Math.max(0, currentBalance); 
 
-        // Calculate fee based on balance *before* contribution/growth
-        const monthlyFee = balance * (feeRateDecimal / 12);
-        balance -= monthlyFee;
-        yearlyFees += monthlyFee;
-
-        // Add monthly contribution (use potentially modified value)
-        balance += currentMonthlyContribution;
-        yearlyContribution += currentMonthlyContribution;
-
-        // Generate random monthly return
-        const randomShock = randomStandardNormal();
-        const randomMonthlyReturn = monthlyMeanReturn + randomShock * monthlyVolatility;
-        
-        // Grow balance
-        balance *= (1 + randomMonthlyReturn);
-        balance = Math.max(0, balance); // Ensure non-negative balance
-      }
+      // Calculate random monthly return using the *effective* rates for this year
+      const randomFactor = randomStandardNormal(); 
+      const monthlyReturn = effectiveMonthlyMeanReturn + randomFactor * effectiveMonthlyVolatility;
       
-      cumulativeFees += yearlyFees;
-      cumulativeContributions += yearlyContribution;
+      // Calculate growth for the month BEFORE fees
+      const growthThisMonth = currentBalance * monthlyReturn;
+      currentBalance += growthThisMonth;
+      currentBalance = Math.max(0, currentBalance); // Ensure non-negative after growth
 
-      // Store end-of-year snapshot for this iteration
-      iterationYearlySnapshots[i][year] = { 
-          balance: balance, 
-          fees: cumulativeFees, // Store cumulative fees up to this year end
-          contribution: cumulativeContributions // Store cumulative contributions up to this year end
-      };
+      // --- Store cumulative values at the END of each year --- 
+      if (month % 12 === 0) {
+        const year = month / 12;
+        
+        // Calculate approximate fees for the year
+        const startOfYearBalance = iterationYearlySnapshots[i][year - 1]?.balance ?? initialInvestment;
+        const avgBalanceThisYear = (startOfYearBalance + currentBalance) / 2;
+        const feesThisYear = Math.max(0, avgBalanceThisYear * feeRateDecimal);
+        currentBalance -= feesThisYear; // Deduct fees at year end
+        currentBalance = Math.max(0, currentBalance);
+        
+        // --- Calculate Contribution and Growth during this specific year --- 
+        // Contribution during year = sum of monthly contributions + one-off impacts during that year
+        // Find the applicable monthly contribution for this past year (it might have changed mid-year due to event)
+        // This requires a slightly more complex look back or storing the contribution rate per year.
+        // Simplification: Use the contribution rate at the *end* of the year for the whole year.
+        const contributionThisYear = (currentMonthlyContribution * 12) + oneOffImpact; // oneOffImpact already happened at month 1
+
+        // Growth during year = End Balance - Start Balance - Contribution This Year + Fees This Year
+        const growthDuringThisYear = currentBalance - startOfYearBalance - contributionThisYear + feesThisYear;
+        // ------------------------------------------------------------------
+        
+        // Store snapshot for the end of this year
+        iterationYearlySnapshots[i][year] = { 
+            balance: currentBalance, 
+            fees: feesThisYear, // Fees incurred *during* this year
+            contribution: contributionThisYear, // Contribution made *during* this year
+            growth: growthDuringThisYear // Growth achieved *during* this year
+        };
+      }
+      // ---------------------------------------------------------
     }
   }
+  // --- End Monte Carlo Simulation Loop ---
 
-  // --- Aggregate results year by year --- 
+  // --- Calculate Percentiles and Final Yearly Data --- 
   const finalYearlyData: YearlyData[] = [];
-  
-  // Year 0 state (initial)
-  finalYearlyData.push({
-      year: 0,
-      contribution: initialInvestment,
-      totalContributions: initialInvestment,
-      balanceP10: initialInvestment,
-      balanceP50: initialInvestment,
-      balanceP90: initialInvestment,
-      growthP50: 0,
-      totalGrowthP50: 0,
-      feesP50: 0,
-      totalFeesP50: 0,
-      balanceRealP50: initialInvestment, // Real balance is same initially
+
+  // Pre-calculate the P50 indices for efficiency
+  const p50Indices = Array(timeHorizonYears + 1).fill(0).map((_, year) => {
+      const yearBalances = iterationYearlySnapshots.map(iter => iter[year]?.balance ?? 0).sort((a, b) => a - b);
+      const yearFees = iterationYearlySnapshots.map(iter => iter[year]?.fees ?? 0).sort((a, b) => a - b);
+      const yearContributions = iterationYearlySnapshots.map(iter => iter[year]?.contribution ?? 0).sort((a, b) => a - b);
+      const yearGrowths = iterationYearlySnapshots.map(iter => iter[year]?.growth ?? 0).sort((a, b) => a - b);
+      const p50Index = Math.floor(MONTE_CARLO_ITERATIONS * 0.5);
+      return {
+          balance: yearBalances[p50Index],
+          fees: yearFees[p50Index],
+          contribution: yearContributions[p50Index],
+          growth: yearGrowths[p50Index]
+      };
   });
 
-  for (let year = 1; year <= timeHorizonYears; year++) {
-    const yearBalances = iterationYearlySnapshots.map(iter => iter[year].balance).sort((a, b) => a - b);
-    const yearCumulFees = iterationYearlySnapshots.map(iter => iter[year].fees).sort((a, b) => a - b);
-    // Contributions are deterministic, take from any iteration
-    const yearCumulContributions = iterationYearlySnapshots[0][year].contribution;
-    const contributionThisYear = yearCumulContributions - iterationYearlySnapshots[0][year - 1].contribution;
-
-    const p10Index = Math.floor(numIterations * 0.10);
-    const p50Index = Math.floor(numIterations * 0.50);
-    const p90Index = Math.floor(numIterations * 0.90);
-
-    const balanceP10 = yearBalances[p10Index];
-    const balanceP50 = yearBalances[p50Index];
-    const balanceP90 = yearBalances[p90Index];
-    const totalFeesP50 = yearCumulFees[p50Index];
-    const feesThisYearP50 = totalFeesP50 - (finalYearlyData[year - 1]?.totalFeesP50 ?? 0);
-
-    const totalGrowthP50 = balanceP50 - yearCumulContributions;
-    const growthThisYearP50 = totalGrowthP50 - (finalYearlyData[year - 1]?.totalGrowthP50 ?? 0);
+  for (let year = 0; year <= timeHorizonYears; year++) {
+    // Get all iteration results for this specific year and sort for P10/P90
+    const yearBalances = iterationYearlySnapshots.map(iter => iter[year]?.balance ?? 0).sort((a, b) => a - b);
+    // No need to re-sort fees/contributions/growths if only using P50 from precalculated data
     
-    const balanceRealP50 = balanceP50 / Math.pow(1 + inflationRateDecimal, year);
+    // Calculate P10, P90 indices
+    const p10Index = Math.floor(MONTE_CARLO_ITERATIONS * 0.1);
+    const p90Index = Math.floor(MONTE_CARLO_ITERATIONS * 0.9);
+
+    // Calculate cumulative totals for the median (P50) path up to this year
+    let totalContributionsP50 = 0;
+    let totalGrowthP50 = 0;
+    let totalFeesP50 = 0;
+    for(let y=0; y<=year; y++) { // Sum up values from the precalculated P50 path
+        totalContributionsP50 += p50Indices[y].contribution;
+        totalGrowthP50 += p50Indices[y].growth;
+        totalFeesP50 += p50Indices[y].fees;
+    }
+    
+    // Calculate real balance (adjusted for inflation) for P50
+    const inflationFactor = Math.pow(1 + inflationRateDecimal, year);
+    // Use the pre-calculated P50 balance for this year
+    const balanceP50 = p50Indices[year].balance;
+    const balanceRealP50 = balanceP50 / inflationFactor;
 
     finalYearlyData.push({
       year: year,
-      contribution: Math.round(contributionThisYear * 100) / 100,
-      totalContributions: Math.round(yearCumulContributions * 100) / 100,
-      balanceP10: Math.round(balanceP10 * 100) / 100,
+      contribution: Math.round(p50Indices[year].contribution * 100) / 100, // Use P50 value for the year
+      totalContributions: Math.round(totalContributionsP50 * 100) / 100,
+      balanceP10: Math.round(yearBalances[p10Index] * 100) / 100, // Use sorted balances for P10/P90
       balanceP50: Math.round(balanceP50 * 100) / 100,
-      balanceP90: Math.round(balanceP90 * 100) / 100,
-      growthP50: Math.round(growthThisYearP50 * 100) / 100,
+      balanceP90: Math.round(yearBalances[p90Index] * 100) / 100, // Use sorted balances for P10/P90
+      growthP50: Math.round(p50Indices[year].growth * 100) / 100, // Use P50 value for the year
       totalGrowthP50: Math.round(totalGrowthP50 * 100) / 100,
-      feesP50: Math.round(feesThisYearP50 * 100) / 100,
+      feesP50: Math.round(p50Indices[year].fees * 100) / 100, // Use P50 value for the year
       totalFeesP50: Math.round(totalFeesP50 * 100) / 100,
-      balanceRealP50: Math.round(balanceRealP50 * 100) / 100,
+      balanceRealP50: Math.round(balanceRealP50 * 100) / 100, // Add real balance
     });
   }
-  // ------------------------------------
+  // -----------------------------------------------------
 
   return {
     yearlyData: finalYearlyData,

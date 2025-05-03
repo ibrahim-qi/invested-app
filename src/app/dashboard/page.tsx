@@ -22,8 +22,31 @@ type UserProfile = {
   // Add other fields if needed by the dashboard itself later
 }
 
-// Add type for saved simulation data fetched on client
-type SavedSimulation = Database['public']['Tables']['saved_simulations']['Row'];
+// --- Detailed types for SavedSimulation JSONB columns ---
+// type SimulationParametersJson = {
+//   initial_investment?: number; // Matches DB column names
+//   monthly_contribution?: number;
+//   time_horizon?: number;
+//   risk_level?: string;
+//   // Add others if needed (e.g., scenario_id, scenario_choice_id if stored here)
+// };
+//
+// type SimulationResultsJson = {
+//   p50_final_balance?: number;
+//   p10_final_balance?: number;
+//   p90_final_balance?: number;
+//   // Add others if needed (e.g., benchmarks)
+// };
+
+// Base type from generated schema
+type BaseSavedSimulation = Database['public']['Tables']['saved_simulations']['Row'];
+
+// Extend the base Row type to include properly typed JSONB columns
+// type DetailedSavedSimulation = Omit<BaseSavedSimulation, 'parameters' | 'results'> & {
+//   parameters: SimulationParametersJson | null;
+//   results: SimulationResultsJson | null;
+// };
+// ---------------------------------------------------------
 
 // Import Concept type separately if not already globally available
 type Concept = Database['public']['Tables']['concepts']['Row'];
@@ -119,20 +142,29 @@ const formatDisplay = (text: string | null | undefined): string => {
     return text.split(/[_ -]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
+// Use the base Row type generated from the schema
+type SavedSimulation = BaseSavedSimulation;
+
 export default function DashboardPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false); // Track if auth check is done
-  // --- State for dashboard data ---
+  // --- State for dashboard data (Use base type) ---
   const [savedSimulations, setSavedSimulations] = useState<SavedSimulation[]>([]);
-  const [isLoadingSims, setIsLoadingSims] = useState(false); // Separate loading for sims
+  const [isLoadingSims, setIsLoadingSims] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
+  // --- State to prevent simulation fetch loop ---
+  const [simsFetchAttempted, setSimsFetchAttempted] = useState(false); 
   // --- State for concepts & modal --- 
   const [allConcepts, setAllConcepts] = useState<Concept[]>([]);
   const [isLoadingConcepts, setIsLoadingConcepts] = useState(false);
   const [conceptError, setConceptError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<Concept | null>(null);
+  // --- State for User Progress --- 
+  const [completedConceptIds, setCompletedConceptIds] = useState<Set<string>>(new Set());
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
   // --------------------------------
   const supabase = createClientComponentClient<Database>();
   const router = useRouter();
@@ -198,10 +230,10 @@ export default function DashboardPage() {
     checkAuthAndFetchProfile();
   }, [supabase, router]);
 
-  // --- Effect to Fetch Saved Simulations AFTER profile is loaded and onboarding is complete ---
+  // --- Effect to Fetch Saved Simulations (adjust type cast) ---
   useEffect(() => {
-    // Only run if profile is loaded, onboarding is complete, and we haven't fetched yet
-    if (profile && profile.onboarding_complete && !isLoadingSims && savedSimulations.length === 0) {
+    // Only run if profile is loaded, onboarding is complete, and we haven't attempted the fetch yet
+    if (profile && profile.onboarding_complete && !simsFetchAttempted) {
       const fetchSimulations = async () => {
         console.log("Fetching saved simulations for user:", profile.user_id);
         setIsLoadingSims(true);
@@ -219,27 +251,33 @@ export default function DashboardPage() {
           setSimError("Couldn't load saved simulations.");
         } else {
           console.log("Saved simulations fetched:", simData);
-          setSavedSimulations(simData || []);
+          // Cast to the base type
+          setSavedSimulations((simData as SavedSimulation[]) || []); 
         }
         setIsLoadingSims(false);
       };
+      // Mark as attempted BEFORE calling fetch
+      setSimsFetchAttempted(true);
       fetchSimulations();
     }
-  }, [profile, supabase, isLoadingSims, savedSimulations.length]); // Dependencies
+  }, [profile, supabase, simsFetchAttempted]); // Depend on profile and attempt flag
   // -------------------------------------------------------------------------------------
 
-  // --- Effect to Fetch Concepts --- 
+  // --- Effect to Fetch Concepts (Runs once after profile load) --- 
   useEffect(() => {
-    // Only run if profile is loaded, onboarding is complete, and we haven't fetched concepts yet
-    if (profile && profile.onboarding_complete && !isLoadingConcepts && allConcepts.length === 0) {
+    // Only run if profile exists, onboarding complete, and not already fetched
+    if (profile && profile.onboarding_complete && allConcepts.length === 0) {
        const fetchConcepts = async () => {
           console.log("Fetching all concepts...");
           setIsLoadingConcepts(true);
           setConceptError(null);
-          const { data, error } = await supabase.from('concepts').select('*');
+          // Fetch concepts ordered by creation time or ID for somewhat stable order
+          // Select all columns to match the Concept type used in useState
+          const { data, error } = await supabase.from('concepts').select('*').order('id', { ascending: true }); 
           if (error) {
               console.error("Error fetching concepts:", error.message);
               setConceptError("Couldn't load educational concepts.");
+              setAllConcepts([]); // Ensure it's an empty array on error
           } else {
               console.log("Concepts fetched:", data?.length);
               setAllConcepts(data || []);
@@ -248,8 +286,32 @@ export default function DashboardPage() {
       };
       fetchConcepts();
     }
-  }, [profile, supabase, isLoadingConcepts, allConcepts.length]);
-  // --------------------------------
+  }, [profile, supabase, allConcepts.length]);
+  // ------------------------------------------
+
+  // --- Effect to Fetch User Progress (Runs once after profile load) --- 
+  useEffect(() => {
+     if (profile && profile.onboarding_complete && completedConceptIds.size === 0) {
+         const fetchProgress = async () => {
+             setIsLoadingProgress(true);
+             setProgressError(null);
+             const { data, error } = await supabase
+                 .from('user_concept_progress')
+                 .select('concept_id')
+                 .eq('user_id', profile.user_id);
+             
+             if (error) {
+                 console.error("Error fetching user progress:", error.message);
+                 setProgressError("Couldn't load learning progress.");
+             } else {
+                 setCompletedConceptIds(new Set(data.map(p => p.concept_id)));
+             }
+             setIsLoadingProgress(false);
+         };
+         fetchProgress();
+     }
+  }, [profile, supabase, completedConceptIds.size]);
+  // ---------------------------------------------------------------
 
   // --- Generate Suggestions (Call helper function) --- 
   // Moved calculation up before conditional return
@@ -279,6 +341,16 @@ export default function DashboardPage() {
   }, [profile, allConcepts]); 
   // -------------------------------------------
 
+  // --- Determine Next Recommended Concept --- 
+  const nextRecommendedConcept = useMemo(() => {
+      if (isLoadingConcepts || isLoadingProgress || allConcepts.length === 0) {
+          return null; // Don't recommend until loaded
+      }
+      // Find the first concept in the ordered list that is NOT in the completed set
+      return allConcepts.find(concept => !completedConceptIds.has(concept.id)) || null;
+  }, [allConcepts, completedConceptIds, isLoadingConcepts, isLoadingProgress]);
+  // --------------------------------------------
+
   // --- Modal Control Functions ---
   const openConceptModal = (concept: Concept) => {
     setSelectedConcept(concept);
@@ -291,7 +363,7 @@ export default function DashboardPage() {
   };
   // -----------------------------
 
-  // --- Helper to create query string (copied from original server component) --- 
+  // --- Helper to create query string (Use direct columns) ---
   const createSimulationQueryString = (sim: SavedSimulation): string => {
       const params: Record<string, string | number | null | undefined> = {
           initialInvestment: sim.initial_investment,
@@ -300,9 +372,8 @@ export default function DashboardPage() {
           riskLevel: sim.risk_level,
           scenarioId: sim.scenario_id,
           scenarioChoiceId: sim.scenario_choice_id,
-          // Add inflation/fee if they are stored in saved_simulations
-          // annualInflationRate: sim.annual_inflation_rate, 
-          // annualFeeRate: sim.annual_fee_rate,
+          annualInflationRate: sim.annual_inflation_rate, 
+          annualFeeRate: sim.annual_fee_rate,
       };
       const filteredParams = Object.entries(params)
           .filter(([_, value]) => value !== null && value !== undefined)
@@ -344,7 +415,7 @@ export default function DashboardPage() {
     // Add other goals as needed
   };
 
-  const latestSimulationBalance = savedSimulations[0]?.final_balance; // Get latest sim balance
+  const latestSimulationBalance = savedSimulations[0]?.final_balance ?? 0; // Get latest sim balance
 
   // Calculate progress for each selected goal
   const goalProgress = profile.selected_goals?.map(goal => {
@@ -361,6 +432,25 @@ export default function DashboardPage() {
   }) || [];
   // -----------------------------------------------
 
+  // Helper function to get goal details (add this within the component or outside if preferred)
+  const goalDetailsMap: Record<string, { label: string; target: number }> = {
+    'retirement': { label: 'Plan for Retirement', target: 500000 }, // Example targets, adjust as needed
+    'home_ownership': { label: 'Save for a Home', target: 30000 },
+    'debt_management': { label: 'Manage Debt', target: 5000 },
+    'build_wealth': { label: 'General Wealth Building', target: 100000 },
+    'education': { label: 'Save for Education', target: 20000 },
+  };
+
+  const getGoalDetails = (goalId: string) => {
+    return goalDetailsMap[goalId] || { label: formatDisplay(goalId), target: 0 }; // Fallback
+  };
+
+  // Helper function for currency formatting (add or import)
+  const formatCurrency = (value: number | null | undefined): string => {
+    if (value == null) return '£0.00'; // Or N/A
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(value);
+  };
+
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
       <h1 className="text-3xl font-bold mb-6">Welcome back!</h1>
@@ -372,13 +462,35 @@ export default function DashboardPage() {
         concept={selectedConcept} 
       />
 
-      {/* Summary Card */}
+      {/* --- How InvestEd Works Section (MOVED HERE) --- */}
+      <div className="mb-8 p-6 bg-indigo-50 border border-indigo-200 rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold mb-3 text-indigo-800">How InvestEd Works</h2>
+          <p className="text-gray-700 mb-2">
+              InvestEd helps you learn about investing and simulate potential outcomes based on your choices.
+          </p>
+          <ul className="list-disc list-inside space-y-1 text-gray-600">
+              <li>
+                  <strong>Learn:</strong> Explore key <Link href="/learn" className="text-indigo-600 hover:underline">concepts</Link> through interactive modules, test your knowledge with quizzes, and track your progress. Definitions for tricky terms are available via tooltips.
+              </li>
+              <li>
+                  <strong>Simulate:</strong> Use the <Link href="/simulation" className="text-indigo-600 hover:underline">simulator</Link> to model potential outcomes using a Monte Carlo method. Pay attention to the P10/P50/P90 range to understand potential volatility and likelihoods.
+              </li>
+              <li>
+                  <strong>Analyze:</strong> Review your <span className="font-medium">Saved Simulations</span> below to compare results, understand the impact of your choices, and refine your strategy. Click 'View Analysis' for a detailed breakdown.
+              </li>
+               <li>
+                  <strong>Connect:</strong> Apply what you learn directly in the simulator, and look out for helpful concept explanations triggered by simulation events or parameters.
+              </li>
+          </ul>
+      </div>
+
+      {/* Original Summary Card (KEEP THIS ONE) */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Profile Summary</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <p><span className="font-medium text-gray-600">Knowledge Level:</span> {formatDisplay(profile.financial_knowledge_level)}</p>
               <p><span className="font-medium text-gray-600">Risk Profile:</span> {formatDisplay(profile.risk_tolerance_profile)}</p>
-              <p><span className="font-medium text-gray-600">Primary Goal:</span> {primaryGoal}</p>
+              <p><span className="font-medium text-gray-600">Primary Goal:</span> {formatDisplay(primaryGoal)}</p> {/* Use formatDisplay */}
               <p><span className="font-medium text-gray-600">Career Stage:</span> {formatDisplay(profile.career_stage)}</p>
               {profile.selected_goals && profile.selected_goals.length > 1 && (
                     <p className="md:col-span-2"><span className="font-medium text-gray-600">Other Goals:</span> {profile.selected_goals.slice(1).map(formatDisplay).join(', ')}</p>
@@ -407,61 +519,109 @@ export default function DashboardPage() {
             <p className="text-gray-500 italic">Could not generate specific recommendations at this time.</p>
           )}
 
-          {/* Suggested Concepts */}
-          {relevantConcepts.length > 0 && (
+          {/* Suggested Concepts - Update to show next recommended first */}
+          {(relevantConcepts.length > 0 || nextRecommendedConcept) && (
             <div className="mt-6 pt-4 border-t border-gray-200">
-              <p className="text-gray-600 mb-1 font-medium">Learning Concepts (Based on {formatDisplay(profile.financial_knowledge_level)} Level):</p>
+              <p className="text-gray-600 mb-1 font-medium">Learning Concepts</p>
               {conceptError && <p className="text-red-500 text-xs italic">{conceptError}</p>}
-              {isLoadingConcepts && <p className="text-gray-500 text-xs italic">Loading concepts...</p>}
-              {!isLoadingConcepts && !conceptError && (
-                <ul className="list-disc list-inside space-y-1">
-                  {relevantConcepts.slice(0, 3).map(concept => ( // Show top 3 relevant
-                    <li key={concept.id}>
-                      <button 
-                        onClick={() => openConceptModal(concept)}
-                        className="text-indigo-600 hover:text-indigo-800 hover:underline text-sm text-left"
-                      >
-                        {concept.title}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+              {(isLoadingConcepts || isLoadingProgress) && <p className="text-gray-500 text-xs italic">Loading concepts...</p>}
+              {!isLoadingConcepts && !isLoadingProgress && !conceptError && (
+                 <> 
+                    {/* Highlight Next Recommended Concept */}
+                    {nextRecommendedConcept ? (
+                       <div className="mb-3 p-3 border border-green-200 bg-green-50 rounded-md">
+                          <p className="text-xs font-semibold text-green-700 mb-1">Recommended Next Step:</p>
+                          <button 
+                            onClick={() => openConceptModal(nextRecommendedConcept)} 
+                            className="text-indigo-600 hover:text-indigo-800 hover:underline text-sm font-semibold text-left"
+                          >
+                             {nextRecommendedConcept.title}
+                          </button>
+                       </div>
+                    ) : (
+                       <p className="text-sm text-green-600 italic mb-3">You've completed all available concepts!</p> 
+                    )}
+                    
+                    {/* Display other concepts relevant to level (excluding the recommended one if shown) */}
+                    <p className="text-gray-600 mb-1 font-medium text-sm">Concepts for your level ({formatDisplay(profile.financial_knowledge_level)}):</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      {relevantConcepts
+                         .filter(concept => concept.id !== nextRecommendedConcept?.id) // Don't repeat recommendation
+                         .slice(0, 5) // Limit displayed concepts
+                         .map(concept => (
+                          <li key={concept.id}>
+                            <button 
+                              onClick={() => openConceptModal(concept)}
+                              className="text-indigo-600 hover:text-indigo-800 hover:underline text-sm text-left"
+                            >
+                              {concept.title}
+                            </button>
+                             {completedConceptIds.has(concept.id) && <span className="text-green-500 text-xs ml-1">✓</span>} 
+                          </li>
+                      ))}
+                    </ul>
+                    {relevantConcepts.length > 5 && (
+                        <Link href="/learn" className="text-xs text-indigo-600 hover:underline mt-2 block">View all...</Link>
+                    )}
+                </>
               )}
             </div>
           )}
       </div>
       
       {/* Goal Progress Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-           <h2 className="text-xl font-semibold text-gray-800 mb-4">Goal Progress</h2>
-           {goalProgress.length > 0 ? (
-             <div className="space-y-4">
-               {goalProgress.map((goal) => (
-                 <div key={goal.name}>
-                   <div className="flex justify-between items-center mb-1">
-                     <span className="text-sm font-medium text-gray-700">{goal.name}</span>
-                     <span className="text-xs text-gray-500">Target: {goal.target}</span>
-                   </div>
-                   <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                     <div 
-                        className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out" 
-                        style={{ width: `${goal.percentage}%` }}
-                      ></div>
-                   </div>
-                   <div className="flex justify-between items-center mt-1">
-                      <span className="text-xs text-gray-500">{goal.current}</span>
-                      <span className="text-sm font-semibold text-indigo-700">{goal.percentage}%</span>
-                   </div>
-                 </div>
-               ))}
-             </div>
-           ) : (
-             <p className="text-gray-600 italic">Select goals during onboarding to track progress here.</p>
-           )}
-      </div>
+      {profile?.selected_goals && profile.selected_goals.length > 0 && (
+        <div className="bg-white shadow sm:rounded-lg p-4 sm:p-6 mb-8"> {/* Added mb-8 */}
+            <h2 className="text-lg font-medium text-gray-900 mb-4">Goal Progress</h2>
+            <div className="space-y-6">
+                {profile.selected_goals.map(goalId => {
+                    const goalDetails = getGoalDetails(goalId); 
+                    const target = goalDetails.target;
+                    const latestSim = savedSimulations?.[0];
+                    // Use direct columns from latestSim
+                    const latestSimP50 = latestSim?.final_balance ?? 0; // <-- Use direct final_balance (P50)
+                    const latestSimHorizon = latestSim?.time_horizon_years ?? 'N/A'; // <-- Use direct time_horizon_years
+                    const latestSimMonthlyContrib = latestSim?.monthly_contribution ?? 0; // <-- Use direct monthly_contribution
 
-      {/* --- Restored Saved Simulations Section --- */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    if (goalId === 'debt_management') {
+                        return (
+                            <div key={goalId}>
+                                <div className="flex justify-between items-baseline">
+                                    <h3 className="text-base font-medium text-gray-800">{goalDetails.label}</h3>
+                                    <span className="text-sm font-semibold text-gray-600">Target: {formatCurrency(target)}</span>
+                                </div>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Simulations can help plan contributions towards debt reduction. Your latest simulation uses monthly contributions of {formatCurrency(latestSimMonthlyContrib)}.
+                                </p>
+                            </div>
+                        );
+                    } else {
+                        const progressPercent = target > 0 ? Math.min(100, Math.round((latestSimP50 / target) * 100)) : 0;
+                        return (
+                            <div key={goalId}>
+                                <div className="flex justify-between items-baseline mb-1">
+                                    <h3 className="text-base font-medium text-gray-800">{goalDetails.label}</h3>
+                                    <span className="text-sm font-semibold text-gray-600">Target: {formatCurrency(target)}</span>
+                                </div>
+                                <div className="relative pt-1">
+                                     <div className="overflow-hidden h-2 mb-2 text-xs flex rounded bg-indigo-200">
+                                         <div style={{ width: `${progressPercent}%` }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500"></div>
+                                     </div>
+                                     <div className="flex justify-between items-center text-xs text-gray-500">
+                                         <span>Projected @ Year {latestSimHorizon}: ~{formatCurrency(latestSimP50)} (Based on latest sim)</span>
+                                         <span className="font-semibold">{progressPercent}%</span>
+                                     </div>
+                                </div>
+                            </div>
+                        );
+                    }
+                })}
+            </div>
+        </div>
+      )}
+
+      {/* Recent Simulations Section */}
+      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200 mb-8"> {/* Added mb-8 */}
           <h2 className="text-xl font-semibold mb-5 text-gray-800">Recent Simulations</h2>
           {isLoadingSims && <p className="text-gray-500 italic">Loading simulations...</p>}
           {simError && <p className="text-red-500 italic">{simError}</p>}
@@ -482,7 +642,7 @@ export default function DashboardPage() {
                       {profile && <DeleteSimulationButton simulationId={sim.id} userId={profile.user_id} />}
                     </div>
                     <div className="space-y-1">
-                      <p className="text-sm text-gray-600">Params: £{sim.initial_investment.toLocaleString()} initial, £{sim.monthly_contribution.toLocaleString()}/mo, {sim.time_horizon_years} yrs, {sim.risk_level}</p>
+                      <p className="text-sm text-gray-600">Params: £{sim.initial_investment?.toLocaleString()} initial, £{sim.monthly_contribution?.toLocaleString()}/mo, {sim.time_horizon_years?.toLocaleString()} yrs, {sim.risk_level}</p>
                       {sim.scenario_id && <p className="text-xs italic text-gray-500">Scenario applied: {sim.scenario_id}</p>}
                       <p className="pt-1 text-base font-semibold text-green-700">Final Balance: £{Number(sim.final_balance).toLocaleString()}</p>
                     </div>
@@ -503,11 +663,6 @@ export default function DashboardPage() {
           )}
       </div>
       {/* ------------------------------------------ */}
-
-      {/* 
-          TODO: Add back original dashboard sections (like saved simulations) 
-          by refactoring their data fetching into useEffect hooks.
-      */}
     </div>
   );
 }

@@ -92,6 +92,16 @@ export default function SimulationDetailPage() {
   // State for Concept Modal (if implementing links)
   // const [selectedConcept, setSelectedConcept] = useState<Concept | null>(null);
 
+  // --- Introduction Text --- (Can go here)
+  const pageIntroduction = (
+    <p className="mb-6 text-gray-600 bg-gray-50 p-4 rounded-md border border-gray-200">
+      This page provides a detailed breakdown of your saved simulation ({simulationId}). 
+      Review the parameters you used, the final results, and the year-by-year projection on the chart. 
+      Use the "Decision Impact" section (if available) to see how different event choices could have changed the outcome. 
+      You can also run "What-If" scenarios to explore variations.
+    </p>
+  );
+
   // Fetch user (similar to analysis list page)
   useEffect(() => {
     const getUser = async () => {
@@ -397,8 +407,7 @@ export default function SimulationDetailPage() {
   const handleRunWhatIf = (resultData: YearlyData[]) => {
       console.log("Received What-If Result Data:", resultData);
       setWhatIfChartData(resultData);
-      // Optionally close modal here or let modal handle it
-      // setIsWhatIfModalOpen(false);
+      setIsWhatIfModalOpen(false);
   };
 
   // --- Handler to open concept modal (if implemented) ---
